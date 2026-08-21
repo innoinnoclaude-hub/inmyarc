@@ -209,6 +209,7 @@ function Portal() {
         onIdentity={saveIdentity}
         initialTab={dialog.tab}
         initialMember={dialog.member}
+        minDate={todayISO()}
         onSubmitDay={d.submitDay}
         onAssign={d.assignTask}
       />

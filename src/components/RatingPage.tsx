@@ -6,8 +6,8 @@ import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
 import type { Entry } from "../lib/types";
 import { useToast } from "./Toaster";
-import { AdminAddDialog } from "./AdminAddDialog";
 import { EditEntryDialog } from "./EditEntryDialog";
+import { EntryDialog, type DialogTab } from "./EntryDialog";
 import { LogTable } from "./LogTable";
 import { Summary } from "./Summary";
 import {
@@ -105,10 +105,11 @@ function Board() {
   const { passcode, lock } = usePasscode();
   const [date, setDate] = useState(todayISO);
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [adding, setAdding] = useState<{ open: boolean; member: string | null }>({
-    open: false,
-    member: null,
-  });
+  const [adding, setAdding] = useState<{
+    open: boolean;
+    tab: DialogTab;
+    member: string | null;
+  }>({ open: false, tab: "day", member: null });
   const d = useDashboard(date, passcode);
   const today = todayISO();
 
@@ -195,7 +196,7 @@ function Board() {
           <Button onClick={lock}>Sign out</Button>
           <Button
             variant="primary"
-            onClick={() => setAdding({ open: true, member: null })}
+            onClick={() => setAdding({ open: true, tab: "day", member: null })}
           >
             <Plus className="size-3.5" />
             Add task
@@ -241,17 +242,23 @@ function Board() {
         onAttendance={(m, a) =>
           void guard(() => d.setAttendance(m, a), "Day updated.")
         }
-        onAddFor={(memberId) => setAdding({ open: true, member: memberId })}
+        onAddFor={(memberId) =>
+          setAdding({ open: true, tab: "day", member: memberId })
+        }
       />
 
-      <AdminAddDialog
-        key={`${adding.member ?? "none"}-${adding.open}`}
+      <EntryDialog
         open={adding.open}
-        onClose={() => setAdding({ open: false, member: null })}
+        onClose={() => setAdding((a) => ({ ...a, open: false }))}
         members={d.roster}
+        dayLogs={d.dayLogs}
         date={date}
+        identity={adding.member}
+        onIdentity={() => {}}
+        initialTab={adding.tab}
         initialMember={adding.member}
-        onAdd={d.addEntry}
+        onSubmitDay={d.submitDay}
+        onAssign={d.assignTask}
       />
 
       {editing && (
