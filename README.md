@@ -115,7 +115,7 @@ passcode is only as private as the people who know it.
 | path      | what it is                                                          |
 | --------- | ------------------------------------------------------------------- |
 | `/`       | the board. Today is editable by anyone; **earlier days are view-only, permanently** — there is no unlock here |
-| `/rating` | admin. The same board view, passcode-gated, with rating and remarks editable and nothing else — for any day, including locked ones |
+| `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, rating and remarks |
 
 `vercel.json` already rewrites everything to `index.html`, so `/rating` works
 on a deployed build.

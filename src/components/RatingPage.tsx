@@ -6,6 +6,7 @@ import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
 import type { Entry } from "../lib/types";
 import { useToast } from "./Toaster";
+import { AdminAddDialog } from "./AdminAddDialog";
 import { EditEntryDialog } from "./EditEntryDialog";
 import { LogTable } from "./LogTable";
 import { Summary } from "./Summary";
@@ -15,6 +16,7 @@ import {
   ChevronRight,
   Chip,
   Label,
+  Plus,
   Refresh,
   TextInput,
   cx,
@@ -103,6 +105,10 @@ function Board() {
   const { passcode, lock } = usePasscode();
   const [date, setDate] = useState(todayISO);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [adding, setAdding] = useState<{ open: boolean; member: string | null }>({
+    open: false,
+    member: null,
+  });
   const d = useDashboard(date, passcode);
   const today = todayISO();
 
@@ -187,9 +193,14 @@ function Board() {
             <Refresh className={cx("size-4", (d.busy || d.loading) && "animate-spin")} />
           </Button>
           <Button onClick={lock}>Sign out</Button>
-          <Button variant="primary" onClick={() => (window.location.href = "/")}>
-            Board
+          <Button
+            variant="primary"
+            onClick={() => setAdding({ open: true, member: null })}
+          >
+            <Plus className="size-3.5" />
+            Add task
           </Button>
+          <Button onClick={() => (window.location.href = "/")}>Board</Button>
         </div>
       </header>
 
@@ -208,7 +219,8 @@ function Board() {
         canEditTasks
         canRate
         canRemark
-        canAdd={false}
+        canAdd
+        addLabel="Add task"
         onStatus={(id, st) =>
           void guard(() => d.setStatus(id, st, null), "Status updated.")
         }
@@ -229,7 +241,17 @@ function Board() {
         onAttendance={(m, a) =>
           void guard(() => d.setAttendance(m, a), "Day updated.")
         }
-        onAddFor={() => {}}
+        onAddFor={(memberId) => setAdding({ open: true, member: memberId })}
+      />
+
+      <AdminAddDialog
+        key={`${adding.member ?? "none"}-${adding.open}`}
+        open={adding.open}
+        onClose={() => setAdding({ open: false, member: null })}
+        members={d.roster}
+        date={date}
+        initialMember={adding.member}
+        onAdd={d.addEntry}
       />
 
       {editing && (

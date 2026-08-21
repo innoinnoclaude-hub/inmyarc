@@ -410,6 +410,50 @@ export function useDashboard(date: string, passcode: string | null) {
     [run],
   );
 
+  /**
+   * Add a single task for anyone, on the day being viewed. Used by the admin
+   * page, so it has to work on a locked day as well as today.
+   */
+  const addEntry = useCallback(
+    (input: {
+      memberId: string;
+      title: string;
+      details: string;
+      status: StatusKey;
+      minutes: number | null;
+      assigned: boolean;
+    }) =>
+      run(async () => {
+        const target = dateRef.current;
+        const createdBy = input.assigned ? null : input.memberId;
+        if (locked) {
+          const { error } = await supabase.rpc("admin_insert_entry", {
+            p_pass: needPass(),
+            p_log_date: target,
+            p_member: input.memberId,
+            p_created_by: createdBy,
+            p_title: input.title.trim(),
+            p_details: input.details.trim() || null,
+            p_status: input.status,
+            p_minutes: input.minutes,
+          });
+          if (error) throw error;
+          return;
+        }
+        const { error } = await supabase.from("entries").insert({
+          log_date: target,
+          member_id: input.memberId,
+          created_by: createdBy,
+          title: input.title.trim(),
+          details: input.details.trim() || null,
+          status: input.status,
+          minutes: input.minutes,
+        });
+        if (error) throw error;
+      }),
+    [run, locked],
+  );
+
   /** Edit a task in place. Only the keys passed are touched. */
   const updateEntry = useCallback(
     (
@@ -547,6 +591,7 @@ export function useDashboard(date: string, passcode: string | null) {
     submitDay,
     assignTask,
     setStatus,
+    addEntry,
     updateEntry,
     setRating,
     setRemarks,
