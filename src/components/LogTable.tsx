@@ -16,6 +16,7 @@ import {
   Chip,
   CrossCircle,
   Pencil,
+  Plus,
   Rating,
   TickCircle,
   Trash,
@@ -47,12 +48,12 @@ interface Props {
 const COLS = [
   { key: "sno", label: "#", width: "w-[5.5%]" },
   { key: "member", label: "Member", width: "w-[12%]" },
-  { key: "task", label: "Task", width: "w-[28%]" },
+  { key: "task", label: "Task", width: "w-[27%]" },
   { key: "time", label: "Time", width: "w-[7%]" },
   { key: "status", label: "Status", width: "w-[14.5%]" },
   { key: "rating", label: "Rating", width: "w-[11%]" },
-  { key: "remarks", label: "Remarks", width: "w-[15%]" },
-  { key: "actions", label: "", width: "w-[7%]" },
+  { key: "remarks", label: "Remarks", width: "w-[14%]" },
+  { key: "actions", label: "", width: "w-[9%]" },
 ];
 
 export function LogTable({
@@ -331,8 +332,20 @@ export function LogTable({
                         </td>
 
                         <td className="px-2 py-3">
-                          {!frozen && (
+                          {(canAdd || !frozen) && (
                             <div className="flex items-center justify-end gap-0.5">
+                              {/* one per member, on the first of their rows */}
+                              {canAdd && index === 0 && (
+                                <button
+                                  type="button"
+                                  aria-label={`Add a task for ${group.member.name}`}
+                                  title={`Add a task for ${group.member.name}`}
+                                  onClick={() => onAddFor(group.member.id)}
+                                  className="focus-ring rounded-xs p-1.5 text-ink-4 opacity-60 transition hover:bg-mute-bg hover:text-ink hover:opacity-100 group-hover/row:opacity-100"
+                                >
+                                  <Plus className="size-3.5" />
+                                </button>
+                              )}
                               {confirmId === entry.id ? (
                                 <button
                                   type="button"
@@ -380,8 +393,9 @@ export function LogTable({
                             <button
                               type="button"
                               onClick={() => onAddFor(group.member.id)}
-                              className="focus-ring text-[12px] font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
+                              className="focus-ring inline-flex items-center gap-1 rounded-sm border border-line-strong bg-surface px-2 py-1 text-[12px] font-medium text-ink-2 transition-colors hover:border-ink-4 hover:text-ink"
                             >
+                              <Plus className="size-3" />
                               {addLabel ?? (isMe ? "Add yours" : "Assign a task")}
                             </button>
                           )}
