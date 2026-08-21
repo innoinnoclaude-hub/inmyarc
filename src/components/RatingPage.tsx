@@ -4,7 +4,9 @@ import { APP } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
+import type { Entry } from "../lib/types";
 import { useToast } from "./Toaster";
+import { EditEntryDialog } from "./EditEntryDialog";
 import { LogTable } from "./LogTable";
 import { Summary } from "./Summary";
 import {
@@ -100,6 +102,7 @@ function Board() {
   const toast = useToast();
   const { passcode, lock } = usePasscode();
   const [date, setDate] = useState(todayISO);
+  const [editing, setEditing] = useState<Entry | null>(null);
   const d = useDashboard(date, passcode);
   const today = todayISO();
 
@@ -202,30 +205,48 @@ function Board() {
         groups={d.groups}
         memberById={d.memberById}
         identity={null}
-        canEditTasks={false}
+        canEditTasks
         canRate
         canRemark
-        onStatus={() => {}}
+        canAdd={false}
+        onStatus={(id, st) =>
+          void guard(() => d.setStatus(id, st, null), "Status updated.")
+        }
         onRating={(id, r) =>
           void guard(
             () => d.setRating(id, r),
             r === null ? "Rating cleared." : `Rated ${r} / 5.`,
           )
         }
-        onEdit={() => {}}
+        onEdit={setEditing}
         onRemarks={(id, text) =>
           void guard(
             () => d.setRemarks(id, text),
             text.trim() ? "Remark saved." : "Remark cleared.",
           )
         }
-        onDelete={() => {}}
-        onAttendance={() => {}}
+        onDelete={(id) => void guard(() => d.deleteEntry(id), "Entry removed.")}
+        onAttendance={(m, a) =>
+          void guard(() => d.setAttendance(m, a), "Day updated.")
+        }
         onAddFor={() => {}}
       />
 
+      {editing && (
+        <EditEntryDialog
+          key={editing.id}
+          entry={editing}
+          owner={d.memberById.get(editing.member_id) ?? null}
+          members={d.memberById}
+          identity={null}
+          onClose={() => setEditing(null)}
+          onSave={d.updateEntry}
+          onDelete={d.deleteEntry}
+        />
+      )}
+
       <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-[11.5px] text-ink-4">
-        <p>Admin — ratings and remarks only, for any day</p>
+        <p>Admin — full edit access for any day</p>
         <p className="tnum">all times {APP.timezone.replace("_", " ")}</p>
       </footer>
     </div>
