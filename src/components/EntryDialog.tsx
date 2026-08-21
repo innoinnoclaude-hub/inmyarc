@@ -38,6 +38,7 @@ export function EntryDialog({
   onIdentity,
   initialTab,
   initialMember,
+  minDate,
   onSubmitDay,
   onAssign,
 }: {
@@ -50,6 +51,9 @@ export function EntryDialog({
   onIdentity: (id: string) => void;
   initialTab: DialogTab;
   initialMember: string | null;
+  /** Earliest day the assign tab may target. The board pins this to today;
+   *  the admin page leaves it open so a past day can be corrected. */
+  minDate?: string;
   onSubmitDay: (input: {
     memberId: string;
     attendance: AttendanceKey;
@@ -362,14 +366,14 @@ export function EntryDialog({
           </div>
 
           <div data-stagger>
-            <Label htmlFor="on" hint="today only">
+            <Label htmlFor="on" hint={minDate ? "today only" : undefined}>
               For the day
             </Label>
             <TextInput
               id="on"
               type="date"
               value={assignDate}
-              min={todayISO()}
+              min={minDate}
               max={todayISO()}
               onChange={(e) => setAssignDate(e.target.value || date)}
               className="tnum"
