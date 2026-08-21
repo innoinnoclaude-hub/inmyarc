@@ -31,8 +31,10 @@ interface Props {
   canEditTasks: boolean;
   canRate: boolean;
   canRemark: boolean;
-  /** Show the "Add yours / Assign a task" link on a member with no entries. */
+  /** Show the add link on a member with no entries. */
   canAdd: boolean;
+  /** Overrides the empty-row link text (the admin page says "Add task"). */
+  addLabel?: string;
   onStatus: (entryId: string, status: StatusKey) => void;
   onRating: (entryId: string, rating: number | null) => void;
   onEdit: (entry: Entry) => void;
@@ -61,6 +63,7 @@ export function LogTable({
   canRate,
   canRemark,
   canAdd,
+  addLabel,
   onStatus,
   onRating,
   onEdit,
@@ -201,24 +204,34 @@ export function LogTable({
                             )}
                           </div>
                           <div className="mt-1.5">
-                            {att ? (
+                            {att || !frozen ? (
                               <InlineSelect
-                                value={group.dayLog!.attendance}
+                                value={group.dayLog?.attendance ?? ""}
                                 disabled={frozen}
-                                options={ATTENDANCE.map((a) => ({
-                                  key: a.key,
-                                  label: a.label,
-                                }))}
+                                options={[
+                                  ...(att
+                                    ? []
+                                    : [{ key: "", label: "Not marked" }]),
+                                  ...ATTENDANCE.map((a) => ({
+                                    key: a.key,
+                                    label: a.label,
+                                  })),
+                                ]}
                                 onChange={(v) =>
+                                  v &&
                                   onAttendance(
                                     group.member.id,
                                     v as AttendanceKey,
                                   )
                                 }
                               >
-                                <Chip tone={att.tone} dot>
-                                  {att.short}
-                                </Chip>
+                                {att ? (
+                                  <Chip tone={att.tone} dot>
+                                    {att.short}
+                                  </Chip>
+                                ) : (
+                                  <Chip tone="mute">Not marked</Chip>
+                                )}
                               </InlineSelect>
                             ) : (
                               <span className="text-[11.5px] text-ink-4">
@@ -369,7 +382,7 @@ export function LogTable({
                               onClick={() => onAddFor(group.member.id)}
                               className="focus-ring text-[12px] font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
                             >
-                              {isMe ? "Add yours" : "Assign a task"}
+                              {addLabel ?? (isMe ? "Add yours" : "Assign a task")}
                             </button>
                           )}
                         </div>
