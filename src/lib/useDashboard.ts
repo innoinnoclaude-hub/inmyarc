@@ -140,6 +140,28 @@ export function useDashboard(date: string, passcode: string | null) {
 
   /** A past day is locked; only today is directly writable. */
   const locked = date !== todayISO();
+  // Read through a ref inside the mutations: they are memoised on `run` alone,
+  // so a plain closure over `locked` would keep whatever it was at mount and a
+  // past-day write would silently take the direct route and be dropped by RLS.
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+
+  /**
+   * PostgREST answers 204 for a write that RLS filtered down to zero rows, so
+   * "succeeded" and "silently changed nothing" look identical. Every direct
+   * write therefore asks for its rows back and fails loudly when none come.
+   */
+  const affected = <T,>(res: { data: T[] | null; error: unknown }): T[] => {
+    if (res.error) throw res.error;
+    const rows = res.data ?? [];
+    if (rows.length === 0) {
+      throw new Error(
+        "Nothing changed. The entry may have been removed by someone else, " +
+          "or this day is locked and needs the admin page.",
+      );
+    }
+    return rows;
+  };
 
   const needPass = () => {
     const p = passRef.current;
@@ -283,7 +305,7 @@ export function useDashboard(date: string, passcode: string | null) {
     }) =>
       run(async () => {
         const target = dateRef.current;
-        if (target !== todayISO()) {
+        if (lockedRef.current) {
           const pass = needPass();
           const { error: dayError } = await supabase.rpc("admin_set_day", {
             p_pass: pass,
@@ -310,16 +332,20 @@ export function useDashboard(date: string, passcode: string | null) {
           return rows.length;
         }
 
-        const { error: dayError } = await supabase.from("day_logs").upsert(
-          {
-            member_id: input.memberId,
-            log_date: target,
-            attendance: input.attendance,
-            note: input.note.trim() || null,
-          },
-          { onConflict: "member_id,log_date" },
+        affected(
+          await supabase
+            .from("day_logs")
+            .upsert(
+              {
+                member_id: input.memberId,
+                log_date: target,
+                attendance: input.attendance,
+                note: input.note.trim() || null,
+              },
+              { onConflict: "member_id,log_date" },
+            )
+            .select("id"),
         );
-        if (dayError) throw dayError;
 
         // every row must carry an identical set of keys — PostgREST rejects a
         // bulk insert whose objects have uneven keys
@@ -335,8 +361,7 @@ export function useDashboard(date: string, passcode: string | null) {
             minutes: draftMinutes(e),
           }));
         if (rows.length) {
-          const { error } = await supabase.from("entries").insert(rows);
-          if (error) throw error;
+          affected(await supabase.from("entries").insert(rows).select("id"));
         }
         return rows.length;
       }),
@@ -370,15 +395,19 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase.from("entries").insert({
-          log_date: input.logDate,
-          member_id: input.memberId,
-          created_by: null,
-          title: input.title.trim(),
-          details: input.details.trim() || null,
-          status: "not_done",
-        });
-        if (error) throw error;
+        affected(
+          await supabase
+            .from("entries")
+            .insert({
+              log_date: input.logDate,
+              member_id: input.memberId,
+              created_by: null,
+              title: input.title.trim(),
+              details: input.details.trim() || null,
+              status: "not_done",
+            })
+            .select("id"),
+        );
       }),
     [run],
   );
@@ -392,7 +421,7 @@ export function useDashboard(date: string, passcode: string | null) {
           status_by: actorId,
           status_at: new Date().toISOString(),
         };
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_update_entry", {
             p_pass: needPass(),
             p_id: entryId,
@@ -401,11 +430,13 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase
-          .from("entries")
-          .update(patch)
-          .eq("id", entryId);
-        if (error) throw error;
+        affected(
+          await supabase
+            .from("entries")
+            .update(patch)
+            .eq("id", entryId)
+            .select("id"),
+        );
       }),
     [run],
   );
@@ -426,7 +457,7 @@ export function useDashboard(date: string, passcode: string | null) {
       run(async () => {
         const target = dateRef.current;
         const createdBy = input.assigned ? null : input.memberId;
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_insert_entry", {
             p_pass: needPass(),
             p_log_date: target,
@@ -440,18 +471,22 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase.from("entries").insert({
-          log_date: target,
-          member_id: input.memberId,
-          created_by: createdBy,
-          title: input.title.trim(),
-          details: input.details.trim() || null,
-          status: input.status,
-          minutes: input.minutes,
-        });
-        if (error) throw error;
+        affected(
+          await supabase
+            .from("entries")
+            .insert({
+              log_date: target,
+              member_id: input.memberId,
+              created_by: createdBy,
+              title: input.title.trim(),
+              details: input.details.trim() || null,
+              status: input.status,
+              minutes: input.minutes,
+            })
+            .select("id"),
+        );
       }),
-    [run, locked],
+    [run],
   );
 
   /** Edit a task in place. Only the keys passed are touched. */
@@ -483,7 +518,7 @@ export function useDashboard(date: string, passcode: string | null) {
                 }
               : {}),
         };
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_update_entry", {
             p_pass: needPass(),
             p_id: entryId,
@@ -492,11 +527,13 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase
-          .from("entries")
-          .update(fields)
-          .eq("id", entryId);
-        if (error) throw error;
+        affected(
+          await supabase
+            .from("entries")
+            .update(fields)
+            .eq("id", entryId)
+            .select("id"),
+        );
       }),
     [run],
   );
@@ -519,7 +556,7 @@ export function useDashboard(date: string, passcode: string | null) {
     (entryId: string, remarks: string) =>
       run(async () => {
         const value = remarks.trim().slice(0, 500) || null;
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_update_entry", {
             p_pass: needPass(),
             p_id: entryId,
@@ -528,11 +565,13 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase
-          .from("entries")
-          .update({ remarks: value })
-          .eq("id", entryId);
-        if (error) throw error;
+        affected(
+          await supabase
+            .from("entries")
+            .update({ remarks: value })
+            .eq("id", entryId)
+            .select("id"),
+        );
       }),
     [run],
   );
@@ -540,7 +579,7 @@ export function useDashboard(date: string, passcode: string | null) {
   const deleteEntry = useCallback(
     (entryId: string) =>
       run(async () => {
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_delete_entry", {
             p_pass: needPass(),
             p_id: entryId,
@@ -548,11 +587,9 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase
-          .from("entries")
-          .delete()
-          .eq("id", entryId);
-        if (error) throw error;
+        affected(
+          await supabase.from("entries").delete().eq("id", entryId).select("id"),
+        );
       }),
     [run],
   );
@@ -560,7 +597,7 @@ export function useDashboard(date: string, passcode: string | null) {
   const setAttendance = useCallback(
     (memberId: string, attendance: AttendanceKey) =>
       run(async () => {
-        if (locked) {
+        if (lockedRef.current) {
           const { error } = await supabase.rpc("admin_set_day", {
             p_pass: needPass(),
             p_member: memberId,
@@ -571,11 +608,15 @@ export function useDashboard(date: string, passcode: string | null) {
           if (error) throw error;
           return;
         }
-        const { error } = await supabase.from("day_logs").upsert(
-          { member_id: memberId, log_date: dateRef.current, attendance },
-          { onConflict: "member_id,log_date" },
+        affected(
+          await supabase
+            .from("day_logs")
+            .upsert(
+              { member_id: memberId, log_date: dateRef.current, attendance },
+              { onConflict: "member_id,log_date" },
+            )
+            .select("id"),
         );
-        if (error) throw error;
       }),
     [run],
   );
