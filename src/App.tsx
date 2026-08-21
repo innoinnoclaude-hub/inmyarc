@@ -129,6 +129,7 @@ function Portal() {
           canEditTasks={isConfigured && !locked}
           canRate={false}
           canRemark={isConfigured && !locked}
+          canAdd={isConfigured && !locked}
           onEdit={setEditing}
           onRating={() => {}}
           onStatus={(id, s) =>

@@ -31,6 +31,8 @@ interface Props {
   canEditTasks: boolean;
   canRate: boolean;
   canRemark: boolean;
+  /** Show the "Add yours / Assign a task" link on a member with no entries. */
+  canAdd: boolean;
   onStatus: (entryId: string, status: StatusKey) => void;
   onRating: (entryId: string, rating: number | null) => void;
   onEdit: (entry: Entry) => void;
@@ -58,6 +60,7 @@ export function LogTable({
   canEditTasks,
   canRate,
   canRemark,
+  canAdd,
   onStatus,
   onRating,
   onEdit,
@@ -360,7 +363,7 @@ export function LogTable({
                           <span className="text-[12.5px] text-ink-4">
                             No entries logged.
                           </span>
-                          {!frozen && (
+                          {canAdd && (
                             <button
                               type="button"
                               onClick={() => onAddFor(group.member.id)}
