@@ -4,6 +4,7 @@ import { APP } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
+import { downloadDayReport } from "../lib/report";
 import type { Entry } from "../lib/types";
 import { useToast } from "./Toaster";
 import { EditEntryDialog } from "./EditEntryDialog";
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   Chip,
   Label,
+  Download,
   Plus,
   Refresh,
   TextInput,
@@ -105,6 +107,7 @@ function Board() {
   const { passcode, lock } = usePasscode();
   const [date, setDate] = useState(todayISO);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [adding, setAdding] = useState<{
     open: boolean;
     tab: DialogTab;
@@ -192,6 +195,26 @@ function Board() {
             className="w-9 px-0"
           >
             <Refresh className={cx("size-4", (d.busy || d.loading) && "animate-spin")} />
+          </Button>
+          <Button
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                await downloadDayReport(date, d.groups, d.memberById);
+                toast("Report downloaded.");
+              } catch (e) {
+                toast(
+                  e instanceof Error ? e.message : "Could not build the report.",
+                  "error",
+                );
+              } finally {
+                setDownloading(false);
+              }
+            }}
+            disabled={downloading || d.loading}
+          >
+            <Download className="size-3.5" />
+            {downloading ? "Building…" : "Report"}
           </Button>
           <Button onClick={lock}>Sign out</Button>
           <Button

@@ -425,3 +425,12 @@ export function Duration({
     </span>
   );
 }
+
+export function Download({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
+      <path d="M8 2v8m0 0L4.8 6.8M8 10l3.2-3.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="square" />
+      <path d="M2.5 12.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="square" />
+    </svg>
+  );
+}
