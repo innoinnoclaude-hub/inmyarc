@@ -130,8 +130,10 @@ on a deployed build.
 
 Every task carries two ratings, both set by an admin at `/rating`:
 
-- **Efficiency** — a 1-5 slider: how well it was done
-- **Impact** — 1-5 stars: how much it mattered
+- **Efficiency** — a 1-5 slider: how well it was done. Starts at **3**, so an
+  admin only moves it to say better or worse than usual
+- **Impact** — 1-5 stars: how much it mattered. Starts blank, because putting a
+  number on work nobody has looked at would be a lie
 
 ```
 score = minutes x (efficiency / 5) x impact
