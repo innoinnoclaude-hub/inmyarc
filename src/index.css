@@ -26,14 +26,16 @@
   --color-bad: #b0242c;
   --color-bad-bg: #fbecec;
 
-  /* calendar ramp — white through to deep green, five steps, flat fills.
-     Darkest means led the team that day, lightest means last. */
-  --color-cal-0: #f2f2ef;
-  --color-cal-1: #d9ede0;
-  --color-cal-2: #a8d6bb;
-  --color-cal-3: #6bb98d;
-  --color-cal-4: #2f8f5b;
-  --color-cal-5: #14663c;
+  /* Calendar ramp for position: red at the back of the pack through orange and
+     yellow to green at the front. Each square is a flat fill; the progression
+     across the five steps is what carries the meaning. Hues are spaced far
+     enough apart to be told apart at 15px. */
+  --color-cal-0: #ebebe7; /* nothing logged */
+  --color-cal-1: #cf4130; /* last */
+  --color-cal-2: #e8833a;
+  --color-cal-3: #f0c548;
+  --color-cal-4: #9ac54a;
+  --color-cal-5: #2e9150; /* first */
   --color-mute-bg: #f0f0ed;
 
   --radius-xs: 2px;
