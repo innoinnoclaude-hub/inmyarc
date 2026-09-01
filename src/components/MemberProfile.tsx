@@ -159,16 +159,24 @@ function BarRow({
   max,
   caption,
   emphasis,
+  wideLabel,
 }: {
   label: string;
   value: number;
   max: number;
   caption?: string;
   emphasis?: boolean;
+  /** Two-word labels like "Not done" or "Half day" need room to stay on one line. */
+  wideLabel?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-1.5">
-      <span className="w-10 shrink-0 text-[11.5px] font-medium text-ink-2">
+      <span
+        className={cx(
+          "shrink-0 text-[11.5px] font-medium whitespace-nowrap text-ink-2",
+          wideLabel ? "w-[58px]" : "w-10",
+        )}
+      >
         {label}
       </span>
       <span className="relative h-[7px] flex-1 bg-mute-bg">
@@ -424,6 +432,7 @@ export function MemberProfile({
                       label={STATUS_BY_KEY[s.key as StatusKey].short}
                       value={s.value}
                       max={t.tasks}
+                      wideLabel
                       caption={`${s.value} · ${t.tasks ? Math.round((s.value / t.tasks) * 100) : 0}%`}
                     />
                   ))}
@@ -432,6 +441,7 @@ export function MemberProfile({
                     value={t.assigned}
                     max={t.tasks}
                     caption={`${t.assigned} assigned`}
+                    wideLabel
                   />
                 </div>
                 <div className="rounded-sm border border-line bg-surface py-1.5">
@@ -443,6 +453,7 @@ export function MemberProfile({
                         label={ATTENDANCE_BY_KEY[a.key].short}
                         value={a.value}
                         max={dayLogs.length || 1}
+                        wideLabel
                         caption={`${a.value} ${a.value === 1 ? "day" : "days"}`}
                       />
                     ))}
