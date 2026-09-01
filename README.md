@@ -57,9 +57,15 @@ name once it is above zero.
 
 ## Performance graph
 
-The **Graph** button opens a dialog with a person dropdown (or the whole team)
-and a week-wise / month-wise toggle, showing the last 12 weeks or 12 months:
-a score trend, totals for the range, and — for the whole team — a ranking.
+The **Graph** button opens a dialog with a person dropdown (or the whole team),
+a week-wise / month-wise toggle, and a **ranking period**. It shows the last 12
+weeks or 12 months as a score trend with totals.
+
+The ranking underneath answers the period you pick rather than always the whole
+range: choose a week and it ranks that week, choose a month and it ranks that
+month, or leave it on **Overall** for the full range. Clicking a bar in the
+chart selects its period, and the row for whoever is being viewed is
+highlighted.
 
 Both views read the same numbers. The board does **not** recompute score in the
 browser — it reads `daily_scores`, so the table's points, the rank, the stat
