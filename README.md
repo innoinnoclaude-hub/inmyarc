@@ -151,9 +151,10 @@ person only on a day they logged at least one task, so people who never log do
 not drag it down. The last tile is their **average position out of the whole
 team, across all history**.
 
-Below that: an **activity calendar**, a month at a time with arrows, shaded by
-position that day rather than raw points, so the darkest square always means
-"led the team". Clicking a day slides its tasks open.
+Below that: an **activity calendar** in small GitHub-sized squares, a month at a
+time with arrows, shaded by position that day rather than raw points, so the
+darkest square always means "led the team". Beside it sits the month at a
+glance; click any square and it becomes that day's tasks.
 
 Then **by week**, with four tabs — score, efficiency, impact and position.
 Position is a line chart with 1 at the top, plotted against the two people

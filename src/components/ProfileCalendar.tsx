@@ -18,10 +18,10 @@ const FILL = [
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 /**
- * A month at a time, GitHub-shaped. Shade comes from that day's position in the
- * team rather than raw points, so the darkest square always means "led the
- * team" no matter how big the numbers were that week. Clicking a day slides
- * its tasks open underneath.
+ * A month at a time in small GitHub-sized squares. Shade comes from that day's
+ * position in the team rather than raw points, so the darkest square always
+ * means "led the team" whatever the numbers were that week. The grid keeps its
+ * natural size rather than stretching, and the day's tasks open beside it.
  */
 export function ProfileCalendar({
   rows,
@@ -36,8 +36,8 @@ export function ProfileCalendar({
 }) {
   const [month, setMonth] = useState(() => startOfMonth(todayISO()));
   const [open, setOpen] = useState<string | null>(null);
-  const panel = useRef<HTMLDivElement>(null);
   const grid = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   const cells = useMemo(
     () => monthGrid(month, rows, memberId, teamSize),
@@ -49,145 +49,137 @@ export function ProfileCalendar({
     [open, entries],
   );
 
+  const monthStats = useMemo(() => {
+    const active = cells.filter((c) => c.inMonth && c.tasks > 0);
+    return {
+      days: active.length,
+      tasks: active.reduce((s, c) => s + c.tasks, 0),
+      minutes: active.reduce((s, c) => s + c.minutes, 0),
+      score: active.reduce((s, c) => s + c.score, 0),
+      firsts: active.filter((c) => c.rank === 1).length,
+    };
+  }, [cells]);
+
   const thisMonth = startOfMonth(todayISO());
   const earliest = useMemo(() => {
     const dates = rows.map((r) => r.log_date).sort();
     return dates.length ? startOfMonth(dates[0]) : thisMonth;
   }, [rows, thisMonth]);
 
-  // squares fade in as the month changes
   useEffect(() => {
     const ctx = gsap.context(() => {
       gsap.fromTo(
         "[data-cell]",
-        { opacity: 0, scale: 0.85 },
-        { opacity: 1, scale: 1, duration: 0.28, stagger: 0.004, ease: "power2.out" },
+        { opacity: 0, scale: 0.7 },
+        { opacity: 1, scale: 1, duration: 0.26, stagger: 0.006, ease: "back.out(2)" },
       );
     }, grid);
     return () => ctx.revert();
   }, [month]);
 
-  // the day panel slides rather than snaps
+  // the day panel fades and slides rather than snapping in
   useEffect(() => {
     const el = panel.current;
     if (!el) return;
-    if (!open) {
-      gsap.to(el, { height: 0, opacity: 0, duration: 0.25, ease: "power2.inOut" });
-      return;
-    }
     gsap.fromTo(
       el,
-      { height: 0, opacity: 0 },
-      {
-        height: "auto",
-        opacity: 1,
-        duration: 0.35,
-        ease: "power3.out",
-        onComplete: () => {
-          el.style.height = "auto";
-        },
-      },
+      { opacity: 0, y: 6 },
+      { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
     );
     gsap.fromTo(
       el.querySelectorAll("[data-task]"),
-      { opacity: 0, y: 6 },
-      { opacity: 1, y: 0, duration: 0.28, stagger: 0.04, delay: 0.08, ease: "power2.out" },
+      { opacity: 0, x: -6 },
+      { opacity: 1, x: 0, duration: 0.28, stagger: 0.035, delay: 0.05, ease: "power2.out" },
     );
   }, [open, dayTasks.length]);
 
   return (
-    <div className="rounded-sm border border-line bg-surface">
-      <header className="flex items-center justify-between border-b border-line px-3 py-2">
-        <button
-          type="button"
-          aria-label="Previous month"
-          disabled={month <= earliest}
-          onClick={() => {
-            setOpen(null);
-            setMonth(addMonths(month, -1));
-          }}
-          className={cx(
-            "focus-ring flex size-7 items-center justify-center rounded-xs transition-colors",
-            month <= earliest
-              ? "cursor-not-allowed text-line-strong"
-              : "text-ink-3 hover:bg-mute-bg hover:text-ink",
-          )}
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <span className="tnum text-[12.5px] font-semibold text-ink">
-          {monthShort(month)} {month.slice(0, 4)}
-        </span>
-        <button
-          type="button"
-          aria-label="Next month"
-          disabled={month >= thisMonth}
-          onClick={() => {
-            setOpen(null);
-            setMonth(addMonths(month, 1));
-          }}
-          className={cx(
-            "focus-ring flex size-7 items-center justify-center rounded-xs transition-colors",
-            month >= thisMonth
-              ? "cursor-not-allowed text-line-strong"
-              : "text-ink-3 hover:bg-mute-bg hover:text-ink",
-          )}
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </header>
+    <div className="flex flex-col gap-4 rounded-sm border border-line bg-surface p-3 lg:flex-row lg:gap-5">
+      {/* the month */}
+      <div className="shrink-0">
+        <header className="mb-2.5 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Previous month"
+            disabled={month <= earliest}
+            onClick={() => {
+              setOpen(null);
+              setMonth(addMonths(month, -1));
+            }}
+            className={cx(
+              "focus-ring flex size-6 items-center justify-center rounded-xs transition-colors",
+              month <= earliest
+                ? "cursor-not-allowed text-line-strong"
+                : "text-ink-3 hover:bg-mute-bg hover:text-ink",
+            )}
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+          <span className="tnum min-w-[74px] text-center text-[12px] font-semibold text-ink">
+            {monthShort(month)} {month.slice(0, 4)}
+          </span>
+          <button
+            type="button"
+            aria-label="Next month"
+            disabled={month >= thisMonth}
+            onClick={() => {
+              setOpen(null);
+              setMonth(addMonths(month, 1));
+            }}
+            className={cx(
+              "focus-ring flex size-6 items-center justify-center rounded-xs transition-colors",
+              month >= thisMonth
+                ? "cursor-not-allowed text-line-strong"
+                : "text-ink-3 hover:bg-mute-bg hover:text-ink",
+            )}
+          >
+            <ChevronRight className="size-3.5" />
+          </button>
+        </header>
 
-      <div ref={grid} className="px-3 pt-3 pb-2">
-        <div className="mb-1.5 grid grid-cols-7 gap-1.5">
-          {WEEKDAYS.map((d, i) => (
-            <span
-              key={i}
-              className="text-center text-[9.5px] font-semibold tracking-[0.06em] text-ink-4 uppercase"
-            >
-              {d}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {cells.map((c) => {
-            const active = c.inMonth && c.tasks > 0;
-            return (
-              <button
-                key={c.date}
-                data-cell
-                type="button"
-                disabled={!active}
-                onClick={() => setOpen(open === c.date ? null : c.date)}
-                title={
-                  c.inMonth
-                    ? `${dateLong(c.date)}\n${c.tasks} ${c.tasks === 1 ? "task" : "tasks"} · ${formatDuration(c.minutes)} · ${c.score.toLocaleString("en-IN")} pts${c.rank ? `\nPosition ${c.rank} of ${teamSize}` : ""}`
-                    : undefined
-                }
-                className={cx(
-                  "focus-ring relative aspect-square w-full rounded-[3px] border transition-all duration-150",
-                  c.inMonth ? FILL[c.level] : "bg-transparent",
-                  c.inMonth ? "border-line" : "border-transparent",
-                  active && "cursor-pointer hover:scale-[1.12] hover:border-ink",
-                  open === c.date && "ring-1 ring-ink ring-offset-1",
-                  !c.inMonth && "opacity-0",
-                )}
+        <div ref={grid} className="w-fit">
+          <div className="mb-[3px] grid grid-cols-7 gap-[3px]">
+            {WEEKDAYS.map((d, i) => (
+              <span
+                key={i}
+                className="w-[15px] text-center text-[8.5px] font-semibold text-ink-4 uppercase"
               >
-                <span
+                {d}
+              </span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-[3px]">
+            {cells.map((c) => {
+              const active = c.inMonth && c.tasks > 0;
+              return (
+                <button
+                  key={c.date}
+                  data-cell
+                  type="button"
+                  disabled={!active}
+                  onClick={() => setOpen(open === c.date ? null : c.date)}
+                  title={
+                    c.inMonth
+                      ? `${dateLong(c.date)}\n${c.tasks} ${c.tasks === 1 ? "task" : "tasks"} · ${formatDuration(c.minutes)} · ${c.score.toLocaleString("en-IN")} pts${
+                          c.rank ? `\nPosition ${c.rank} of ${teamSize}` : ""
+                        }`
+                      : undefined
+                  }
                   className={cx(
-                    "tnum absolute inset-0 flex items-center justify-center text-[9.5px] font-medium",
-                    c.level >= 3 ? "text-white" : "text-ink-3",
+                    "size-[15px] rounded-[2px] border transition-transform duration-150",
+                    c.inMonth ? FILL[c.level] : "bg-transparent",
+                    c.inMonth ? "border-line" : "border-transparent",
+                    active &&
+                      "focus-ring cursor-pointer hover:scale-[1.35] hover:border-ink",
+                    open === c.date && "scale-[1.35] border-ink",
+                    !c.inMonth && "opacity-0",
                   )}
-                >
-                  {c.inMonth ? Number(c.date.slice(8)) : ""}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                />
+              );
+            })}
+          </div>
 
-        <div className="mt-2.5 flex items-center justify-between text-[10px] text-ink-4">
-          <span>darkest = led the team that day</span>
-          <span className="flex items-center gap-1.5">
+          <div className="mt-2.5 flex items-center gap-1.5 text-[9.5px] text-ink-4">
             last
             {FILL.map((f) => (
               <span
@@ -196,16 +188,16 @@ export function ProfileCalendar({
               />
             ))}
             first
-          </span>
+          </div>
         </div>
       </div>
 
-      {/* the day's tasks, slid open */}
-      <div ref={panel} className="overflow-hidden" style={{ height: 0, opacity: 0 }}>
-        {open && (
-          <div className="border-t border-line bg-paper px-3 py-2.5">
-            <div className="mb-1.5 flex items-baseline justify-between">
-              <p className="text-[11.5px] font-semibold text-ink">
+      {/* the selected day, or the month at a glance */}
+      <div ref={panel} className="min-w-0 flex-1 border-t border-line pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5">
+        {open ? (
+          <>
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <p className="text-[12px] font-semibold text-ink">
                 {dateLong(open)}
               </p>
               <button
@@ -217,16 +209,16 @@ export function ProfileCalendar({
               </button>
             </div>
             {dayTasks.length === 0 ? (
-              <p className="py-2 text-[12px] text-ink-4">Nothing logged.</p>
+              <p className="text-[12px] text-ink-4">Nothing logged.</p>
             ) : (
               <ul className="flex flex-col gap-1">
                 {dayTasks.map((e) => (
                   <li
                     key={e.id}
                     data-task
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-line bg-surface px-2.5 py-1.5"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-line bg-paper px-2.5 py-1.5"
                   >
-                    <span className="min-w-[160px] flex-1 text-[12px] leading-[1.4] break-words text-ink">
+                    <span className="min-w-[140px] flex-1 text-[12px] leading-[1.4] break-words text-ink">
                       {e.title}
                     </span>
                     <span className="tnum text-[11px] text-ink-3">
@@ -235,7 +227,7 @@ export function ProfileCalendar({
                     <Chip tone={STATUS_BY_KEY[e.status].tone}>
                       {STATUS_BY_KEY[e.status].short}
                     </Chip>
-                    <span className="tnum w-12 text-right text-[11px] text-ink-3">
+                    <span className="tnum w-10 text-right text-[11px] text-ink-3">
                       {e.efficiency && e.impact
                         ? `${e.efficiency}/${e.impact}`
                         : "—"}
@@ -249,7 +241,42 @@ export function ProfileCalendar({
                 ))}
               </ul>
             )}
-          </div>
+          </>
+        ) : (
+          <>
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
+              {monthShort(month)} at a glance
+            </p>
+            {monthStats.days === 0 ? (
+              <p className="text-[12px] text-ink-4">Nothing logged this month.</p>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12px] sm:grid-cols-4">
+                  {[
+                    ["Days worked", String(monthStats.days)],
+                    ["Tasks", String(monthStats.tasks)],
+                    ["Time", formatDuration(monthStats.minutes)],
+                    ["Points", monthStats.score.toLocaleString("en-IN")],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-[10px] tracking-[0.08em] text-ink-4 uppercase">
+                        {k}
+                      </dt>
+                      <dd className="tnum mt-0.5 text-[15px] font-semibold text-ink">
+                        {v}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-3 text-[11.5px] leading-[1.5] text-ink-3">
+                  {monthStats.firsts > 0
+                    ? `Led the team on ${monthStats.firsts} ${monthStats.firsts === 1 ? "day" : "days"} this month. `
+                    : ""}
+                  Click any square to see that day's tasks.
+                </p>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>
