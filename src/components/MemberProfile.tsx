@@ -10,12 +10,10 @@ import { clock, dateShort, startOfMonth, todayISO } from "../lib/date";
 import {
   attendanceSpread,
   averagePosition,
-  bestDay,
   busiestWeekday,
   dailyRanks,
   memberPerDay,
   ratingSpread,
-  sharpestWeekday,
   statusSpread,
   teamPerDay,
   totals,
@@ -294,9 +292,7 @@ export function MemberProfile({
     [ranks, member.id],
   );
   const week = useMemo(() => weekdayProfile(entries), [entries]);
-  const sharp = useMemo(() => sharpestWeekday(week), [week]);
   const busy = useMemo(() => busiestWeekday(week), [week]);
-  const best = useMemo(() => bestDay(entries), [entries]);
   const effSpread = useMemo(() => ratingSpread(entries, "efficiency"), [entries]);
   const impSpread = useMemo(() => ratingSpread(entries, "impact"), [entries]);
   const statuses = useMemo(() => statusSpread(entries), [entries]);
@@ -375,49 +371,6 @@ export function MemberProfile({
               foot: `${teamSize} on the portal`,
             }}
           />
-
-          <div className="grid gap-2 sm:grid-cols-3" data-stagger>
-            {[
-              sharp?.avgEfficiency
-                ? {
-                    k: "Sharpest day",
-                    v: sharp.label,
-                    d: `${sharp.avgEfficiency.toFixed(2)} avg efficiency over ${sharp.days} ${sharp.days === 1 ? "day" : "days"}`,
-                  }
-                : null,
-              busy
-                ? {
-                    k: "Biggest day",
-                    v: busy.label,
-                    d: `${busy.avgScore.toLocaleString("en-IN")} pts on an average ${busy.label}`,
-                  }
-                : null,
-              best
-                ? {
-                    k: "Best single day",
-                    v: dateShort(best.date),
-                    d: `${best.score.toLocaleString("en-IN")} pts across ${best.tasks} ${best.tasks === 1 ? "task" : "tasks"}`,
-                  }
-                : null,
-            ]
-              .filter(Boolean)
-              .map((h) => (
-                <div
-                  key={h!.k}
-                  className="rounded-sm border border-line bg-paper px-3 py-2.5"
-                >
-                  <p className="text-[10px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
-                    {h!.k}
-                  </p>
-                  <p className="mt-1 text-[15px] font-semibold tracking-[-0.01em] text-ink">
-                    {h!.v}
-                  </p>
-                  <p className="mt-0.5 text-[11px] leading-[1.45] text-ink-4">
-                    {h!.d}
-                  </p>
-                </div>
-              ))}
-          </div>
 
           <Section title="Activity" hint="shaded by position that day — click a day for its tasks">
             <ProfileCalendar

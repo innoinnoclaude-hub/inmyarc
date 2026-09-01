@@ -110,16 +110,6 @@ export function byDay(entries: Entry[]) {
   return map;
 }
 
-/** The single best day by score. */
-export function bestDay(entries: Entry[]) {
-  let best: { date: string; score: number; tasks: number } | null = null;
-  for (const [date, d] of byDay(entries)) {
-    if (!best || d.score > best.score)
-      best = { date, score: d.score, tasks: d.tasks };
-  }
-  return best && best.score > 0 ? best : null;
-}
-
 /* ----------------------------- weekday shape ---------------------------- */
 
 export function weekdayProfile(entries: Entry[]): WeekdayStat[] {
@@ -156,15 +146,6 @@ export function weekdayProfile(entries: Entry[]): WeekdayStat[] {
     avgEfficiency: a.rated ? a.eff / a.rated : null,
     avgImpact: a.rated ? a.imp / a.rated : null,
   }));
-}
-
-/** The weekday with the highest average efficiency, needing real data behind it. */
-export function sharpestWeekday(stats: WeekdayStat[]): WeekdayStat | null {
-  const withData = stats.filter((s) => s.avgEfficiency !== null && s.days >= 1);
-  if (!withData.length) return null;
-  return withData.reduce((a, b) =>
-    (b.avgEfficiency ?? 0) > (a.avgEfficiency ?? 0) ? b : a,
-  );
 }
 
 export function busiestWeekday(stats: WeekdayStat[]): WeekdayStat | null {
