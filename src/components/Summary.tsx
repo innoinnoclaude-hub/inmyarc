@@ -90,7 +90,8 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
     let rework = 0;
     let minutes = 0;
     let rated = 0;
-    let ratingSum = 0;
+    let impactSum = 0;
+    let efficiencySum = 0;
     const att = { full_day: 0, wfh: 0, half_day: 0, week_off: 0, leave: 0 };
 
     for (const g of groups) {
@@ -107,9 +108,10 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
         else if (e.status === "not_done") notDone++;
         else rework++;
         if (e.minutes) minutes += e.minutes;
-        if (e.rating) {
+        if (e.impact && e.efficiency) {
           rated++;
-          ratingSum += e.rating;
+          impactSum += e.impact;
+          efficiencySum += e.efficiency;
         }
       }
     }
@@ -122,7 +124,8 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
       notDone,
       rework,
       minutes,
-      avg: rated ? ratingSum / rated : null,
+      avgImpact: rated ? impactSum / rated : null,
+      avgEfficiency: rated ? efficiencySum / rated : null,
       rated,
       att,
       total: groups.length,
@@ -200,7 +203,11 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
 
       <Cell
         label="Time logged"
-        foot={s.avg !== null ? `avg rating ${s.avg.toFixed(1)} / 5` : null}
+        foot={
+          s.avgEfficiency !== null
+            ? `eff ${s.avgEfficiency.toFixed(1)} / impact ${s.avgImpact!.toFixed(1)}`
+            : null
+        }
       >
         <Value text={s.minutes ? formatDuration(s.minutes) : "0m"} />
       </Cell>

@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Rating,
+  Slider,
   TickCircle,
   Trash,
   cx,
@@ -37,7 +38,8 @@ interface Props {
   /** Overrides the empty-row link text (the admin page says "Add task"). */
   addLabel?: string;
   onStatus: (entryId: string, status: StatusKey) => void;
-  onRating: (entryId: string, rating: number | null) => void;
+  onImpact: (entryId: string, value: number | null) => void;
+  onEfficiency: (entryId: string, value: number | null) => void;
   onEdit: (entry: Entry) => void;
   onRemarks: (entryId: string, remarks: string) => void;
   onDelete: (entryId: string) => void;
@@ -46,14 +48,15 @@ interface Props {
 }
 
 const COLS = [
-  { key: "sno", label: "#", width: "w-[5.5%]" },
-  { key: "member", label: "Member", width: "w-[12%]" },
-  { key: "task", label: "Task", width: "w-[27%]" },
-  { key: "time", label: "Time", width: "w-[7%]" },
-  { key: "status", label: "Status", width: "w-[14.5%]" },
-  { key: "rating", label: "Rating", width: "w-[11%]" },
-  { key: "remarks", label: "Remarks", width: "w-[14%]" },
-  { key: "actions", label: "", width: "w-[9%]" },
+  { key: "sno", label: "#", width: "w-[5%]" },
+  { key: "member", label: "Member", width: "w-[11%]" },
+  { key: "task", label: "Task", width: "w-[23%]" },
+  { key: "time", label: "Time", width: "w-[6.5%]" },
+  { key: "status", label: "Status", width: "w-[12.5%]" },
+  { key: "efficiency", label: "Efficiency", width: "w-[11.5%]" },
+  { key: "impact", label: "Impact", width: "w-[10.5%]" },
+  { key: "remarks", label: "Remarks", width: "w-[12%]" },
+  { key: "actions", label: "", width: "w-[8%]" },
 ];
 
 export function LogTable({
@@ -66,7 +69,8 @@ export function LogTable({
   canAdd,
   addLabel,
   onStatus,
-  onRating,
+  onImpact,
+  onEfficiency,
   onEdit,
   onRemarks,
   onDelete,
@@ -112,7 +116,7 @@ export function LogTable({
       ref={root}
       className="w-full overflow-x-auto rounded-md border border-line bg-surface"
     >
-      <table className="w-full min-w-[1120px] table-fixed border-collapse text-left">
+      <table className="w-full min-w-[1280px] table-fixed border-collapse text-left">
         <colgroup>
           {COLS.map((c) => (
             <col key={c.key} className={c.width} />
@@ -315,10 +319,18 @@ export function LogTable({
                         </td>
 
                         <td className="px-3 py-3">
-                          <Rating
-                            value={entry.rating}
+                          <Slider
+                            value={entry.efficiency}
                             readOnly={!canRate}
-                            onChange={(next) => onRating(entry.id, next)}
+                            onChange={(next) => onEfficiency(entry.id, next)}
+                          />
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <Rating
+                            value={entry.impact}
+                            readOnly={!canRate}
+                            onChange={(next) => onImpact(entry.id, next)}
                           />
                         </td>
 
@@ -384,7 +396,7 @@ export function LogTable({
                         </td>
                       </>
                     ) : (
-                      <td colSpan={6} className="px-3 py-3">
+                      <td colSpan={7} className="px-3 py-3">
                         <div className="flex items-center gap-2">
                           <span className="text-[12.5px] text-ink-4">
                             No entries logged.

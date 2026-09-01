@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { todayISO } from "./date";
 import type { DayLog, Entry, Member, RowGroup } from "./types";
-import type { AttendanceKey, StatusKey } from "../config";
+import { scoreFor, type AttendanceKey, type StatusKey } from "../config";
 
 export interface DraftEntry {
   title: string;
@@ -55,12 +55,15 @@ function message(e: unknown): string {
 }
 
 /**
- * Minutes taken x stars, summed. Kept only as the fallback for a day the
- * rollup has not produced a row for; the authority is `daily_scores`, computed
- * by a database trigger, so the board and the graph cannot drift apart.
+ * Fallback for a day whose rollup row does not exist yet; the authority is
+ * `daily_scores`, computed by a database trigger, so the board and the graph
+ * cannot drift apart.
  */
 export function scoreOf(entries: Entry[]): number {
-  return entries.reduce((sum, e) => sum + (e.minutes ?? 0) * (e.rating ?? 0), 0);
+  return entries.reduce(
+    (sum, e) => sum + scoreFor(e.minutes, e.efficiency, e.impact),
+    0,
+  );
 }
 
 /**
@@ -191,7 +194,7 @@ export function useDashboard(date: string, passcode: string | null) {
           supabase
             .from("entries")
             .select(
-              "id,log_date,member_id,created_by,title,details,status,minutes,rating,remarks,status_by,status_at,created_at,updated_at",
+              "id,log_date,member_id,created_by,title,details,status,minutes,efficiency,impact,remarks,status_by,status_at,created_at,updated_at",
             )
             .eq("log_date", target)
             .order("created_at", { ascending: true }),
@@ -538,14 +541,30 @@ export function useDashboard(date: string, passcode: string | null) {
     [run],
   );
 
-  /** Ratings are never writable directly — the column is not granted to anon. */
-  const setRating = useCallback(
-    (entryId: string, rating: number | null) =>
+  /**
+   * Neither rating is writable directly — the columns are not in anon's grant,
+   * so both go through their passcode-gated function.
+   */
+  const setImpact = useCallback(
+    (entryId: string, value: number | null) =>
       run(async () => {
-        const { error } = await supabase.rpc("set_rating", {
+        const { error } = await supabase.rpc("set_impact", {
           p_pass: needPass(),
           p_id: entryId,
-          p_rating: rating,
+          p_value: value,
+        });
+        if (error) throw error;
+      }),
+    [run],
+  );
+
+  const setEfficiency = useCallback(
+    (entryId: string, value: number | null) =>
+      run(async () => {
+        const { error } = await supabase.rpc("set_efficiency", {
+          p_pass: needPass(),
+          p_id: entryId,
+          p_value: value,
         });
         if (error) throw error;
       }),
@@ -634,7 +653,8 @@ export function useDashboard(date: string, passcode: string | null) {
     setStatus,
     addEntry,
     updateEntry,
-    setRating,
+    setImpact,
+    setEfficiency,
     setRemarks,
     deleteEntry,
     setAttendance,

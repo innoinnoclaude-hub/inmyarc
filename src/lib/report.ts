@@ -3,6 +3,7 @@ import {
   APP,
   STATUS_BY_KEY,
   formatDuration,
+  scoreFor,
 } from "../config";
 import { clock, dateLong, weekdayLong } from "./date";
 import type { Member, RowGroup } from "./types";
@@ -17,15 +18,17 @@ const PAGE_W = 297;
 const USABLE = PAGE_W - MARGIN * 2; // 277mm
 
 const COLUMNS: { key: string; header: string; width: number }[] = [
-  { key: "rank", header: "#", width: 9 },
-  { key: "member", header: "Member", width: 26 },
-  { key: "day", header: "Day", width: 26 },
-  { key: "task", header: "Task", width: 60 },
-  { key: "detail", header: "Detail", width: 54 },
-  { key: "time", header: "Time", width: 16 },
-  { key: "status", header: "Status", width: 22 },
-  { key: "rating", header: "Rating", width: 16 },
-  { key: "remarks", header: "Remarks", width: 48 },
+  { key: "rank", header: "#", width: 8 },
+  { key: "member", header: "Member", width: 24 },
+  { key: "day", header: "Day", width: 24 },
+  { key: "task", header: "Task", width: 55 },
+  { key: "detail", header: "Detail", width: 46 },
+  { key: "time", header: "Time", width: 15 },
+  { key: "status", header: "Status", width: 21 },
+  { key: "efficiency", header: "Efficiency", width: 18 },
+  { key: "impact", header: "Impact", width: 15 },
+  { key: "score", header: "Score", width: 14 },
+  { key: "remarks", header: "Remarks", width: 37 },
 ];
 
 const INK: [number, number, number] = [23, 23, 26];
@@ -42,7 +45,8 @@ function summarise(groups: RowGroup[]) {
   let open = 0;
   let minutes = 0;
   let rated = 0;
-  let ratingSum = 0;
+  let impactSum = 0;
+  let efficiencySum = 0;
   for (const g of groups) {
     if (g.dayLog !== null || g.entries.length > 0) reported++;
     if (g.dayLog) {
@@ -55,9 +59,10 @@ function summarise(groups: RowGroup[]) {
       if (e.status === "done") done++;
       else open++;
       if (e.minutes) minutes += e.minutes;
-      if (e.rating) {
+      if (e.impact && e.efficiency) {
         rated++;
-        ratingSum += e.rating;
+        impactSum += e.impact;
+        efficiencySum += e.efficiency;
       }
     }
   }
@@ -70,7 +75,8 @@ function summarise(groups: RowGroup[]) {
     done,
     open,
     minutes,
-    avg: rated ? ratingSum / rated : null,
+    avgImpact: rated ? impactSum / rated : null,
+    avgEfficiency: rated ? efficiencySum / rated : null,
   };
 }
 
@@ -96,7 +102,7 @@ function buildRows(groups: RowGroup[]) {
 
     if (g.entries.length === 0) {
       rows.push({
-        cells: [String(g.rank), lead, day, "No entries logged.", "", "", "", "", ""],
+        cells: [String(g.rank), lead, day, "No entries logged.", "", "", "", "", "", "", ""],
         group: index,
         empty: true,
         first: true,
@@ -113,7 +119,9 @@ function buildRows(groups: RowGroup[]) {
           e.details ?? "",
           formatDuration(e.minutes),
           STATUS_BY_KEY[e.status].label,
-          e.rating ? `${e.rating} / 5` : "—",
+          e.efficiency ? `${e.efficiency} / 5` : "—",
+          e.impact ? `${e.impact} / 5` : "—",
+          String(scoreFor(e.minutes, e.efficiency, e.impact)),
           e.remarks ?? "",
         ],
         group: index,
@@ -172,7 +180,9 @@ export async function buildDayReport(
         i,
         {
           cellWidth: c.width,
-          halign: c.key === "rank" || c.key === "rating" ? "center" : "left",
+          halign: ["rank", "efficiency", "impact", "score"].includes(c.key)
+            ? "center"
+            : "left",
           fontStyle: c.key === "task" ? "bold" : "normal",
         },
       ]),
@@ -232,9 +242,10 @@ export async function buildDayReport(
         `Done ${s.done}`,
         `Open ${s.open}`,
         `Time ${formatDuration(s.minutes)}`,
-        `Avg rating ${s.avg !== null ? s.avg.toFixed(2) : "—"}`,
+        `Avg efficiency ${s.avgEfficiency !== null ? s.avgEfficiency.toFixed(2) : "—"}`,
+        `Avg impact ${s.avgImpact !== null ? s.avgImpact.toFixed(2) : "—"}`,
       ];
-      doc.text(bits.join("     "), MARGIN, MARGIN + 15);
+      doc.text(bits.join("    "), MARGIN, MARGIN + 15);
 
       doc.setDrawColor(...LINE);
       doc.setLineWidth(0.3);

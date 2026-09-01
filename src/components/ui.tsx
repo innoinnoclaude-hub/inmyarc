@@ -434,3 +434,85 @@ export function Download({ className }: IconProps) {
     </svg>
   );
 }
+
+/* ------------------------------- efficiency ------------------------------ */
+
+/**
+ * A 1-5 slider. Read-only it renders as a five segment meter, which stays
+ * legible in a dense table row; editable it is a real range input so it can be
+ * dragged or driven with the arrow keys.
+ */
+export function Slider({
+  value,
+  onChange,
+  readOnly,
+  ariaLabel = "Efficiency",
+}: {
+  value: number | null;
+  onChange: (next: number | null) => void;
+  readOnly?: boolean;
+  ariaLabel?: string;
+}) {
+  const meter = (
+    <span className="inline-flex items-center gap-[3px]">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span
+          key={n}
+          className={cx(
+            "h-[9px] w-[7px] rounded-[1px]",
+            value && n <= value ? "bg-ink" : "bg-line-strong",
+          )}
+        />
+      ))}
+    </span>
+  );
+
+  if (readOnly) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        {meter}
+        <span className="tnum text-[11.5px] font-medium text-ink-3">
+          {value ? `${value}/5` : "\u2014"}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <input
+        type="range"
+        min={1}
+        max={5}
+        step={1}
+        value={value ?? 1}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={cx(
+          "focus-ring h-[14px] w-[62px] cursor-pointer appearance-none bg-transparent",
+          "[&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:bg-line-strong",
+          "[&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-[11px] [&::-webkit-slider-thumb]:w-[11px]",
+          "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-[2px] [&::-webkit-slider-thumb]:bg-ink",
+          "[&::-moz-range-track]:h-[3px] [&::-moz-range-track]:bg-line-strong",
+          "[&::-moz-range-thumb]:h-[11px] [&::-moz-range-thumb]:w-[11px] [&::-moz-range-thumb]:rounded-[2px]",
+          "[&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-ink",
+          !value && "opacity-45",
+        )}
+      />
+      <span className="tnum w-7 text-[11.5px] font-medium text-ink-2">
+        {value ? `${value}/5` : "\u2014"}
+      </span>
+      {value != null && (
+        <button
+          type="button"
+          aria-label="Clear efficiency"
+          title="Clear"
+          onClick={() => onChange(null)}
+          className="focus-ring rounded-xs px-1 text-[11px] text-ink-4 hover:text-ink-2"
+        >
+          &times;
+        </button>
+      )}
+    </span>
+  );
+}

@@ -24,7 +24,8 @@ export interface ScoreRow {
   done: number;
   minutes: number;
   rated: number;
-  rating_sum: number;
+  impact_sum: number;
+  efficiency_sum: number;
   score: number;
 }
 
@@ -37,7 +38,8 @@ export interface Bucket {
   done: number;
   minutes: number;
   score: number;
-  avg: number | null;
+  avgImpact: number | null;
+  avgEfficiency: number | null;
   days: number;
 }
 
@@ -46,7 +48,8 @@ export interface MemberTotal {
   tasks: number;
   minutes: number;
   score: number;
-  avg: number | null;
+  avgImpact: number | null;
+  avgEfficiency: number | null;
 }
 
 const EMPTY_AGG = {
@@ -55,7 +58,8 @@ const EMPTY_AGG = {
   minutes: 0,
   score: 0,
   rated: 0,
-  ratingSum: 0,
+  impactSum: 0,
+  efficiencySum: 0,
 };
 
 /** The first day covered by a view ending today. */
@@ -102,7 +106,8 @@ export function aggregateSeries(
     slot.minutes += r.minutes;
     slot.score += r.score;
     slot.rated += r.rated;
-    slot.ratingSum += r.rating_sum;
+    slot.impactSum += r.impact_sum;
+    slot.efficiencySum += r.efficiency_sum;
     slot.days.add(r.log_date);
   }
   let lastYear = "";
@@ -118,7 +123,8 @@ export function aggregateSeries(
       done: v.done,
       minutes: v.minutes,
       score: v.score,
-      avg: v.rated ? v.ratingSum / v.rated : null,
+      avgImpact: v.rated ? v.impactSum / v.rated : null,
+      avgEfficiency: v.rated ? v.efficiencySum / v.rated : null,
       days: v.days.size,
     };
   });
@@ -136,7 +142,8 @@ export function aggregateLeaderboard(
     slot.minutes += r.minutes;
     slot.score += r.score;
     slot.rated += r.rated;
-    slot.ratingSum += r.rating_sum;
+    slot.impactSum += r.impact_sum;
+    slot.efficiencySum += r.efficiency_sum;
     agg.set(r.member_id, slot);
   }
   return members
@@ -147,7 +154,8 @@ export function aggregateLeaderboard(
         tasks: v.tasks,
         minutes: v.minutes,
         score: v.score,
-        avg: v.rated ? v.ratingSum / v.rated : null,
+        avgImpact: v.rated ? v.impactSum / v.rated : null,
+      avgEfficiency: v.rated ? v.efficiencySum / v.rated : null,
       };
     })
     .sort((a, b) => b.score - a.score || a.member.name.localeCompare(b.member.name));
@@ -230,7 +238,7 @@ export function useScores(open: boolean, grain: Grain) {
     try {
       const { data, error } = await supabase
         .from("daily_scores")
-        .select("member_id,log_date,tasks,done,minutes,rated,rating_sum,score")
+        .select("member_id,log_date,tasks,done,minutes,rated,impact_sum,efficiency_sum,score")
         .gte("log_date", rangeStart(grain))
         .lte("log_date", todayISO());
       if (error) throw error;

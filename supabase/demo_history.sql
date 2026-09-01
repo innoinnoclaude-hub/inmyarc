@@ -5,13 +5,14 @@
 --   delete from public.entries;      -- daily_scores follows automatically
 --
 -- Change the dates to move the window.
-insert into public.entries (log_date, member_id, created_by, title, status, minutes, rating)
+insert into public.entries (log_date, member_id, created_by, title, status, minutes, efficiency, impact)
 select
   d::date, m.id, m.id,
   'Sample task ' || g || ' — ' || to_char(d, 'DD Mon'),
   (array['done','done','done','rework','not_done'])[1 + (h % 5)],
   30 + (h % 210),
-  1 + ((h / 7) % 5)
+  1 + ((h / 7) % 5),
+  1 + ((h / 11) % 5)
 from generate_series(current_date - interval '5 months', current_date, '1 day') d
 cross join public.members m
 cross join generate_series(1, 3) g

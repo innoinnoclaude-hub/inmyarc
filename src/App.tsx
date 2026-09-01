@@ -131,7 +131,8 @@ function Portal() {
           canRemark={isConfigured && !locked}
           canAdd={isConfigured && !locked}
           onEdit={setEditing}
-          onRating={() => {}}
+          onImpact={() => {}}
+          onEfficiency={() => {}}
           onStatus={(id, s) =>
             void guard(() => d.setStatus(id, s, identity), "Status updated.")
           }

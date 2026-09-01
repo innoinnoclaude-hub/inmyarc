@@ -47,7 +47,7 @@ on conflict (member_id, log_date) do update
 
 -- ---------- tasks ----------
 insert into public.entries
-  (log_date, member_id, created_by, title, details, status, minutes, rating, remarks, status_by, status_at)
+  (log_date, member_id, created_by, title, details, status, minutes, efficiency, impact, remarks, status_by, status_at)
 select
   d::date,
   m.id,
@@ -74,6 +74,7 @@ select
   end,
   case when h % 8 = 0 then null else 15 + (h % 300) end,          -- 1 in 8 untimed
   case when h % 5 = 0 then null else 1 + ((h / 7) % 5) end,       -- 1 in 5 unrated
+  case when h % 9 = 0 then null else 1 + ((h / 11) % 5) end,
   case when h % 6 = 0 then (array[
     'Looks good, ship it after the copy review.',
     'Needs a dead-letter path before merge.',

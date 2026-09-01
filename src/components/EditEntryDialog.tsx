@@ -10,6 +10,7 @@ import {
   Label,
   Rating,
   Segmented,
+  Slider,
   TextArea,
   TextInput,
 } from "./ui";
@@ -200,17 +201,10 @@ export function EditEntryDialog({
             />
           </div>
           <div>
-            <Label hint={entry.rating ? `${entry.rating} / 5` : "not rated"}>
-              Rating
-            </Label>
-            <div className="flex h-8 items-center gap-2">
-              <Rating value={entry.rating} readOnly onChange={() => {}} />
-              <a
-                href="/rating"
-                className="focus-ring text-[11.5px] text-ink-4 underline-offset-2 hover:text-ink-2 hover:underline"
-              >
-                set at /rating
-              </a>
+            <Label hint="set at /rating">Efficiency &amp; impact</Label>
+            <div className="flex h-8 flex-wrap items-center gap-x-3 gap-y-1">
+              <Slider value={entry.efficiency} readOnly onChange={() => {}} />
+              <Rating value={entry.impact} readOnly onChange={() => {}} />
             </div>
           </div>
         </div>

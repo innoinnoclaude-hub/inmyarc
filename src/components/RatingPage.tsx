@@ -122,7 +122,7 @@ function Board() {
     for (const g of d.groups)
       for (const e of g.entries) {
         total++;
-        if (e.rating) rated++;
+        if (e.impact && e.efficiency) rated++;
       }
     return { total, rated };
   }, [d.groups]);
@@ -153,7 +153,7 @@ function Board() {
             {dateLong(date)}
           </p>
           <Chip tone={counts.total && counts.rated === counts.total ? "ok" : "wait"}>
-            {counts.rated} / {counts.total} rated
+            {counts.rated} / {counts.total} scored
           </Chip>
           {date !== today && <Chip tone="mute">Archive</Chip>}
         </div>
@@ -248,10 +248,16 @@ function Board() {
         onStatus={(id, st) =>
           void guard(() => d.setStatus(id, st, null), "Status updated.")
         }
-        onRating={(id, r) =>
+        onImpact={(id, v) =>
           void guard(
-            () => d.setRating(id, r),
-            r === null ? "Rating cleared." : `Rated ${r} / 5.`,
+            () => d.setImpact(id, v),
+            v === null ? "Impact cleared." : `Impact set to ${v} / 5.`,
+          )
+        }
+        onEfficiency={(id, v) =>
+          void guard(
+            () => d.setEfficiency(id, v),
+            v === null ? "Efficiency cleared." : `Efficiency set to ${v} / 5.`,
           )
         }
         onEdit={setEditing}
