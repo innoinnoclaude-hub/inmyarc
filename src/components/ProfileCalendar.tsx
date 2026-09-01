@@ -18,10 +18,11 @@ const FILL = [
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 /**
- * A month at a time in small GitHub-sized squares. Shade comes from that day's
- * position in the team rather than raw points, so the darkest square always
- * means "led the team" whatever the numbers were that week. The grid keeps its
- * natural size rather than stretching, and the day's tasks open beside it.
+ * A month at a time in small GitHub-sized squares. Colour comes from that day's
+ * position in the team rather than raw points — red at the back of the pack
+ * through to green at the front — so a glance down the month reads as form
+ * rather than volume. The grid keeps its natural size rather than stretching,
+ * and the day's tasks open beside it.
  */
 export function ProfileCalendar({
   rows,
@@ -180,14 +181,18 @@ export function ProfileCalendar({
           </div>
 
           <div className="mt-2.5 flex items-center gap-1.5 text-[9.5px] text-ink-4">
-            last
-            {FILL.map((f) => (
+            <span>last</span>
+            {FILL.slice(1).map((f) => (
               <span
                 key={f}
-                className={cx("size-[9px] rounded-[2px] border border-line", f)}
+                className={cx("size-[9px] rounded-[2px] border border-line/60", f)}
               />
             ))}
-            first
+            <span>first</span>
+            <span className="ml-2 flex items-center gap-1">
+              <span className="size-[9px] rounded-[2px] border border-line bg-cal-0" />
+              none
+            </span>
           </div>
         </div>
       </div>
