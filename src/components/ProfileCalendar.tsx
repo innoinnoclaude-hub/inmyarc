@@ -29,13 +29,17 @@ export function ProfileCalendar({
   entries,
   memberId,
   teamSize,
+  month,
+  onMonthChange,
 }: {
   rows: ScoreRow[];
   entries: Entry[];
   memberId: string;
   teamSize: number;
+  /** Controlled by the profile so the trend below follows the same month. */
+  month: string;
+  onMonthChange: (next: string) => void;
 }) {
-  const [month, setMonth] = useState(() => startOfMonth(todayISO()));
   const [open, setOpen] = useState<string | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -105,7 +109,7 @@ export function ProfileCalendar({
             disabled={month <= earliest}
             onClick={() => {
               setOpen(null);
-              setMonth(addMonths(month, -1));
+              onMonthChange(addMonths(month, -1));
             }}
             className={cx(
               "focus-ring flex size-6 items-center justify-center rounded-xs transition-colors",
@@ -125,7 +129,7 @@ export function ProfileCalendar({
             disabled={month >= thisMonth}
             onClick={() => {
               setOpen(null);
-              setMonth(addMonths(month, 1));
+              onMonthChange(addMonths(month, 1));
             }}
             className={cx(
               "focus-ring flex size-6 items-center justify-center rounded-xs transition-colors",
