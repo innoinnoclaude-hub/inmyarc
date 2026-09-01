@@ -25,6 +25,15 @@
   --color-off-bg: #f7ecee;
   --color-bad: #b0242c;
   --color-bad-bg: #fbecec;
+
+  /* calendar ramp — white through to deep green, five steps, flat fills.
+     Darkest means led the team that day, lightest means last. */
+  --color-cal-0: #f2f2ef;
+  --color-cal-1: #d9ede0;
+  --color-cal-2: #a8d6bb;
+  --color-cal-3: #6bb98d;
+  --color-cal-4: #2f8f5b;
+  --color-cal-5: #14663c;
   --color-mute-bg: #f0f0ed;
 
   --radius-xs: 2px;
