@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import { formatDuration } from "../config";
-import { dateLong, dateShort, shiftISO } from "../lib/date";
+import { dateLong, dateShort, monthShort, shiftISO } from "../lib/date";
 import {
   SPAN,
+  bucketKeys,
   ordinal,
   rangeStart,
   useScores,
@@ -29,19 +30,36 @@ export function ChartDialog({
 }) {
   const [grain, setGrain] = useState<Grain>("week");
   const [who, setWho] = useState<string>(TEAM);
+  /** "" means the whole range; otherwise the key of one week or month. */
+  const [period, setPeriod] = useState("");
   const { loading, error, seriesFor, leaderboard, ranksFor, hasAny } =
     useScores(open, grain);
 
   useEffect(() => {
-    if (open) setWho(identity ?? TEAM);
+    if (open) {
+      setWho(identity ?? TEAM);
+      setPeriod("");
+    }
   }, [open, identity]);
+
+  // week keys mean nothing in a month view, so drop the selection on a switch
+  useEffect(() => setPeriod(""), [grain]);
 
   const isTeam = who === TEAM;
   const series = useMemo(
     () => seriesFor(isTeam ? null : who),
     [seriesFor, isTeam, who],
   );
-  const board = useMemo(() => leaderboard(members), [leaderboard, members]);
+  const board = useMemo(
+    () => leaderboard(members, period || null),
+    [leaderboard, members, period],
+  );
+
+  const periods = useMemo(() => bucketKeys(grain), [grain]);
+  const periodLabel = (key: string) =>
+    grain === "week"
+      ? `${dateShort(key)} – ${dateShort(shiftISO(key, 6))}`
+      : `${monthShort(key)} ${key.slice(0, 4)}`;
   const ranks = useMemo(
     () => (isTeam ? null : ranksFor(who, members)),
     [ranksFor, isTeam, who, members],
@@ -84,7 +102,7 @@ export function ChartDialog({
       width={860}
     >
       <div className="flex flex-col gap-5">
-        <div className="grid gap-4 sm:grid-cols-2" data-stagger>
+        <div className="grid gap-4 sm:grid-cols-3" data-stagger>
           <div>
             <Label htmlFor="who-chart">Show</Label>
             <Select
@@ -110,6 +128,26 @@ export function ChartDialog({
                 { key: "month", label: "Month wise" },
               ]}
             />
+          </div>
+          <div>
+            <Label htmlFor="period" hint="scopes the ranking">
+              Ranking period
+            </Label>
+            <Select
+              id="period"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+            >
+              <option value="">
+                Overall — all {grain === "week" ? SPAN.week : SPAN.month}{" "}
+                {grain === "week" ? "weeks" : "months"}
+              </option>
+              {[...periods].reverse().map((k) => (
+                <option key={k} value={k}>
+                  {periodLabel(k)}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
 
@@ -174,32 +212,52 @@ export function ChartDialog({
               grain={grain}
               ranks={ranks?.perBucket}
               rankTotal={ranks?.total}
+              selected={period}
+              onSelect={(key) => setPeriod(period === key ? "" : key)}
+              labelFor={periodLabel}
             />
           )}
         </div>
 
-        {isTeam && hasAny && !loading && !error && (
+        {hasAny && !loading && !error && (
           <div data-stagger>
-            <Label hint="score / efficiency-impact / time">Ranking</Label>
+            <Label hint="score / efficiency-impact / time">
+              Ranking &mdash;{" "}
+              {period ? periodLabel(period) : "whole range"}
+            </Label>
             <div className="overflow-hidden rounded-sm border border-line">
               {board.map((row, i) => {
                 const top = board[0]?.score || 1;
                 return (
                   <div
                     key={row.member.id}
-                    className="flex items-center gap-3 border-b border-line px-3 py-2 last:border-b-0"
+                    className={cx(
+                      "flex items-center gap-3 border-b border-line px-3 py-2 last:border-b-0",
+                      row.member.id === who && "bg-mute-bg",
+                    )}
                   >
                     <span className="tnum w-5 shrink-0 text-[11px] font-semibold text-ink-4">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <span className="w-24 shrink-0 truncate text-[12.5px] font-medium text-ink">
+                    <span
+                      className={cx(
+                        "w-24 shrink-0 truncate text-[12.5px]",
+                        row.member.id === who
+                          ? "font-semibold text-ink"
+                          : "font-medium text-ink-2",
+                      )}
+                    >
                       {row.member.name}
                     </span>
                     <span className="relative h-[6px] flex-1 bg-mute-bg">
                       <span
                         className={cx(
                           "absolute inset-y-0 left-0",
-                          i === 0 ? "bg-ink" : "bg-ink-4",
+                          row.member.id === who
+                            ? "bg-ink"
+                            : i === 0
+                              ? "bg-ink-2"
+                              : "bg-ink-4",
                         )}
                         style={{
                           width: `${Math.max((row.score / top) * 100, row.score ? 1.5 : 0)}%`,
@@ -279,12 +337,19 @@ export function BarChart({
   grain,
   ranks,
   rankTotal,
+  selected,
+  onSelect,
+  labelFor,
 }: {
   series: Bucket[];
   grain: Grain;
   /** Per-bucket standing, when a single person is selected. */
   ranks?: (number | null)[];
   rankTotal?: number;
+  /** The bucket the ranking below is scoped to, if any. */
+  selected?: string;
+  onSelect?: (key: string) => void;
+  labelFor?: (key: string) => string;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const max = Math.max(...series.map((b) => b.score), 1);
@@ -328,7 +393,14 @@ export function BarChart({
           ))}
           <div className="absolute inset-0 flex items-end gap-[3px]">
             {series.map((b, i) => (
-              <div key={b.key} className="group/bar relative h-full flex-1">
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => onSelect?.(b.key)}
+                title={
+                  labelFor ? `Rank the team for ${labelFor(b.key)}` : undefined
+                }
+                className="group/bar relative h-full flex-1 cursor-pointer">
                 <div
                   data-bar
                   style={{
@@ -336,7 +408,11 @@ export function BarChart({
                   }}
                   className={cx(
                     "absolute inset-x-0 bottom-0 transition-colors",
-                    b.score ? "bg-ink-2 group-hover/bar:bg-ink" : "bg-transparent",
+                    b.score
+                      ? selected === b.key
+                        ? "bg-ink"
+                        : "bg-ink-2 group-hover/bar:bg-ink"
+                      : "bg-transparent",
                   )}
                 />
                 {!b.score && (
@@ -383,7 +459,7 @@ export function BarChart({
                     )}
                   </dl>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

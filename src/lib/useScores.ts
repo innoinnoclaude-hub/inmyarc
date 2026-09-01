@@ -130,6 +130,15 @@ export function aggregateSeries(
   });
 }
 
+/** The rows belonging to one bucket of the current view. */
+export function rowsInBucket(
+  rows: ScoreRow[],
+  grain: Grain,
+  key: string,
+): ScoreRow[] {
+  return rows.filter((r) => bucketOf(r.log_date, grain) === key);
+}
+
 /** Everyone's totals over the visible range, best first. */
 export function aggregateLeaderboard(
   rows: ScoreRow[],
@@ -275,9 +284,18 @@ export function useScores(open: boolean, grain: Grain) {
     [rows, grain],
   );
 
+  /**
+   * The standing over the whole visible range, or over one bucket of it when a
+   * week or month is picked — so "who led" answers the period on screen rather
+   * than always the last twelve.
+   */
   const leaderboard = useCallback(
-    (members: Member[]) => aggregateLeaderboard(rows, members),
-    [rows],
+    (members: Member[], bucket?: string | null) =>
+      aggregateLeaderboard(
+        bucket ? rowsInBucket(rows, grain, bucket) : rows,
+        members,
+      ),
+    [rows, grain],
   );
 
   const ranksFor = useCallback(
