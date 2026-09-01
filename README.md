@@ -143,13 +143,25 @@ passcode inside the database.
 
 ## Person view
 
-Clicking a name in the table opens that person's profile over the last 84 days:
-headline numbers (score, points per hour, tasks, time, average efficiency and
-impact, current streak), an activity strip, a 12-week score trend, the shape of
-their week, how the work splits by status / assigned / attendance, the spread of
-ratings they have been given, and their recent tasks. It also calls out their
-sharpest weekday by efficiency, their biggest weekday by points, and their best
-single day.
+Clicking a name in the table opens that person's profile.
+
+Two rows of the same six measures — theirs, then the team's — all **per day
+worked**, so nobody is diluted by days they did not log. The team row counts a
+person only on a day they logged at least one task, so people who never log do
+not drag it down. The last tile is their **average position out of the whole
+team, across all history**.
+
+Below that: an **activity calendar**, a month at a time with arrows, shaded by
+position that day rather than raw points, so the darkest square always means
+"led the team". Clicking a day slides its tasks open.
+
+Then **by week**, with four tabs — score, efficiency, impact and position.
+Position is a line chart with 1 at the top, plotted against the two people
+either side of them in the all-time standing, so you can see whether a good week
+was actually good relative to close rivals.
+
+Then the shape of their week, how the work splits, the spread of ratings they
+have been given, and recent tasks.
 
 All of it is derived from the entries themselves in `src/lib/profile.ts`, which
 is pure and exported so the maths can be checked against SQL.

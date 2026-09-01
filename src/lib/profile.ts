@@ -120,23 +120,6 @@ export function bestDay(entries: Entry[]) {
   return best && best.score > 0 ? best : null;
 }
 
-/** Consecutive days up to today on which anything was logged. */
-export function streak(entries: Entry[], dayLogs: DayLog[]): number {
-  const active = new Set<string>([
-    ...entries.map((e) => e.log_date),
-    ...dayLogs.map((d) => d.log_date),
-  ]);
-  let n = 0;
-  let cursor = todayISO();
-  // today may not be filled in yet, so allow the run to start yesterday
-  if (!active.has(cursor)) cursor = shiftISO(cursor, -1);
-  while (active.has(cursor)) {
-    n++;
-    cursor = shiftISO(cursor, -1);
-  }
-  return n;
-}
-
 /* ----------------------------- weekday shape ---------------------------- */
 
 export function weekdayProfile(entries: Entry[]): WeekdayStat[] {
@@ -226,58 +209,276 @@ export function attendanceSpread(
   }));
 }
 
-/* ------------------------------ activity -------------------------------- */
+/* ========================================================================
+ * Team-relative analytics
+ *
+ * Everything below needs the whole team's history, not just one person's,
+ * because position only means something against everybody else.
+ * ====================================================================== */
 
-export interface ActivityCell {
-  date: string;
-  score: number;
+export interface ScoreRow {
+  member_id: string;
+  log_date: string;
   tasks: number;
-  level: 0 | 1 | 2 | 3 | 4;
+  done: number;
+  minutes: number;
+  rated: number;
+  impact_sum: number;
+  efficiency_sum: number;
+  score: number;
 }
 
-/** One cell per day for the last `days`, oldest first, in five flat steps. */
-export function activityStrip(entries: Entry[], days = 84): ActivityCell[] {
-  const byDate = byDay(entries);
-  const cells: ActivityCell[] = [];
-  const start = shiftISO(todayISO(), -(days - 1));
-  const scores: number[] = [];
-  for (let i = 0; i < days; i++) {
-    const date = shiftISO(start, i);
-    scores.push(byDate.get(date)?.score ?? 0);
+/**
+ * DENSE_RANK by score within each day, across every member on the portal —
+ * the same rule the board uses, so a position here matches what was on screen
+ * that day. Members with nothing logged that day are not ranked at all.
+ */
+export function dailyRanks(rows: ScoreRow[]): Map<string, Map<string, number>> {
+  const byDate = new Map<string, ScoreRow[]>();
+  for (const r of rows) {
+    const list = byDate.get(r.log_date);
+    if (list) list.push(r);
+    else byDate.set(r.log_date, [r]);
   }
-  const max = Math.max(...scores, 1);
-  for (let i = 0; i < days; i++) {
-    const date = shiftISO(start, i);
-    const d = byDate.get(date);
-    const score = d?.score ?? 0;
-    const ratio = score / max;
-    const level: ActivityCell["level"] =
-      score === 0 ? 0 : ratio > 0.75 ? 4 : ratio > 0.5 ? 3 : ratio > 0.25 ? 2 : 1;
-    cells.push({ date, score, tasks: d?.tasks ?? 0, level });
+  const out = new Map<string, Map<string, number>>();
+  for (const [date, list] of byDate) {
+    const scores = [...new Set(list.map((r) => r.score))].sort((a, b) => b - a);
+    const rank = new Map<string, number>();
+    for (const r of list) rank.set(r.member_id, scores.indexOf(r.score) + 1);
+    out.set(date, rank);
   }
+  return out;
+}
+
+/** Average position over the days this person actually logged something. */
+export function averagePosition(
+  ranks: Map<string, Map<string, number>>,
+  memberId: string,
+): { avg: number | null; days: number; best: number | null } {
+  let sum = 0;
+  let days = 0;
+  let best: number | null = null;
+  for (const perDay of ranks.values()) {
+    const r = perDay.get(memberId);
+    if (r == null) continue;
+    sum += r;
+    days++;
+    if (best === null || r < best) best = r;
+  }
+  return { avg: days ? sum / days : null, days, best };
+}
+
+export interface PerDay {
+  days: number;
+  score: number;
+  tasks: number;
+  minutes: number;
+  done: number;
+  rated: number;
+  efficiency: number | null;
+  impact: number | null;
+  scorePerHour: number;
+  donePct: number;
+}
+
+function shape(
+  days: number,
+  score: number,
+  tasks: number,
+  minutes: number,
+  done: number,
+  rated: number,
+  effSum: number,
+  impSum: number,
+): PerDay {
+  return {
+    days,
+    score: days ? Math.round(score / days) : 0,
+    tasks: days ? +(tasks / days).toFixed(1) : 0,
+    minutes: days ? Math.round(minutes / days) : 0,
+    done: days ? +(done / days).toFixed(1) : 0,
+    rated,
+    efficiency: rated ? effSum / rated : null,
+    impact: rated ? impSum / rated : null,
+    scorePerHour: minutes ? Math.round((score / minutes) * 60) : 0,
+    donePct: tasks ? Math.round((done / tasks) * 100) : 0,
+  };
+}
+
+/** One person's averages, over the days they logged something. */
+export function memberPerDay(rows: ScoreRow[], memberId: string): PerDay {
+  const mine = rows.filter((r) => r.member_id === memberId && r.tasks > 0);
+  return shape(
+    mine.length,
+    mine.reduce((s, r) => s + r.score, 0),
+    mine.reduce((s, r) => s + r.tasks, 0),
+    mine.reduce((s, r) => s + r.minutes, 0),
+    mine.reduce((s, r) => s + r.done, 0),
+    mine.reduce((s, r) => s + r.rated, 0),
+    mine.reduce((s, r) => s + r.efficiency_sum, 0),
+    mine.reduce((s, r) => s + r.impact_sum, 0),
+  );
+}
+
+/**
+ * The team's averages on the same footing: the unit is one person-day, and a
+ * person only counts on a day they logged at least one task. Someone who never
+ * logs never drags the average down.
+ */
+export function teamPerDay(rows: ScoreRow[]): PerDay {
+  const active = rows.filter((r) => r.tasks > 0);
+  return shape(
+    active.length,
+    active.reduce((s, r) => s + r.score, 0),
+    active.reduce((s, r) => s + r.tasks, 0),
+    active.reduce((s, r) => s + r.minutes, 0),
+    active.reduce((s, r) => s + r.done, 0),
+    active.reduce((s, r) => s + r.rated, 0),
+    active.reduce((s, r) => s + r.efficiency_sum, 0),
+    active.reduce((s, r) => s + r.impact_sum, 0),
+  );
+}
+
+/* ----------------------------- month grid ------------------------------- */
+
+export interface DayCell {
+  date: string;
+  inMonth: boolean;
+  tasks: number;
+  minutes: number;
+  score: number;
+  rank: number | null;
+  /** 0 = nothing logged, 1 = worst position, 5 = best. */
+  level: 0 | 1 | 2 | 3 | 4 | 5;
+}
+
+/**
+ * A Monday-first calendar for one month, padded to whole weeks. Shade comes
+ * from position that day rather than raw score, so the darkest square always
+ * means "led the team", whatever the numbers happened to be.
+ */
+export function monthGrid(
+  monthStart: string,
+  rows: ScoreRow[],
+  memberId: string,
+  teamSize: number,
+): DayCell[] {
+  const ranks = dailyRanks(rows);
+  const mine = new Map(
+    rows.filter((r) => r.member_id === memberId).map((r) => [r.log_date, r]),
+  );
+  const [y, m] = monthStart.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const firstWeekday = weekdayOf(monthStart); // 1 = Monday
+  const cells: DayCell[] = [];
+
+  const push = (date: string, inMonth: boolean) => {
+    const row = inMonth ? mine.get(date) : undefined;
+    const rank = inMonth ? (ranks.get(date)?.get(memberId) ?? null) : null;
+    let level: DayCell["level"] = 0;
+    if (row && row.tasks > 0 && rank) {
+      // best position -> 5, worst -> 1
+      const share = (teamSize - rank + 1) / Math.max(teamSize, 1);
+      level = Math.min(5, Math.max(1, Math.ceil(share * 5))) as DayCell["level"];
+    }
+    cells.push({
+      date,
+      inMonth,
+      tasks: row?.tasks ?? 0,
+      minutes: row?.minutes ?? 0,
+      score: row?.score ?? 0,
+      rank,
+      level,
+    });
+  };
+
+  for (let i = firstWeekday - 1; i > 0; i--) push(shiftISO(monthStart, -i), false);
+  for (let d = 0; d < daysInMonth; d++) push(shiftISO(monthStart, d), true);
+  while (cells.length % 7 !== 0)
+    push(shiftISO(cells[cells.length - 1].date, 1), false);
   return cells;
 }
 
-/* ------------------------------ trend ----------------------------------- */
+/* ---------------------------- weekly series ----------------------------- */
 
-/** Score per calendar week, oldest first. */
-export function weeklyTrend(entries: Entry[], weeks = 12): Bar[] {
-  const byDate = byDay(entries);
-  const out: Bar[] = [];
+export interface WeekPoint {
+  key: string;
+  label: string;
+  score: number;
+  tasks: number;
+  efficiency: number | null;
+  impact: number | null;
+  /** Mean position that week, over the days they logged. Null = no activity. */
+  position: number | null;
+}
+
+export function weeklySeries(
+  rows: ScoreRow[],
+  memberId: string,
+  weeks = 12,
+): WeekPoint[] {
+  const ranks = dailyRanks(rows);
+  const mine = rows.filter((r) => r.member_id === memberId);
   const today = todayISO();
   const thisMonday = shiftISO(today, -(weekdayOf(today) - 1));
+  const out: WeekPoint[] = [];
+
   for (let i = weeks - 1; i >= 0; i--) {
     const monday = shiftISO(thisMonday, -7 * i);
-    let score = 0;
-    let tasks = 0;
-    for (let d = 0; d < 7; d++) {
-      const cell = byDate.get(shiftISO(monday, d));
-      if (cell) {
-        score += cell.score;
-        tasks += cell.tasks;
+    const days = Array.from({ length: 7 }, (_, d) => shiftISO(monday, d));
+    const inWeek = mine.filter((r) => days.includes(r.log_date) && r.tasks > 0);
+    const rated = inWeek.reduce((s, r) => s + r.rated, 0);
+    let rankSum = 0;
+    let rankDays = 0;
+    for (const d of days) {
+      const r = ranks.get(d)?.get(memberId);
+      if (r != null && mine.find((x) => x.log_date === d && x.tasks > 0)) {
+        rankSum += r;
+        rankDays++;
       }
     }
-    out.push({ key: monday, label: monday.slice(8), value: score, sub: `${tasks}` });
+    out.push({
+      key: monday,
+      label: monday,
+      score: inWeek.reduce((s, r) => s + r.score, 0),
+      tasks: inWeek.reduce((s, r) => s + r.tasks, 0),
+      efficiency: rated
+        ? inWeek.reduce((s, r) => s + r.efficiency_sum, 0) / rated
+        : null,
+      impact: rated ? inWeek.reduce((s, r) => s + r.impact_sum, 0) / rated : null,
+      position: rankDays ? rankSum / rankDays : null,
+    });
   }
   return out;
+}
+
+/**
+ * The two people to plot against: whoever sits either side of this person in
+ * the all-time standing. At the very top that is 2nd and 3rd; at the very
+ * bottom it is the two above; anywhere else it is the one above and the one
+ * below, so the comparison is always to near neighbours rather than extremes.
+ */
+export function neighbours(
+  rows: ScoreRow[],
+  memberId: string,
+  members: { id: string; name: string }[],
+): { id: string; name: string; place: number }[] {
+  const total = new Map<string, number>();
+  for (const r of rows)
+    total.set(r.member_id, (total.get(r.member_id) ?? 0) + r.score);
+  const standing = members
+    .map((m) => ({ ...m, score: total.get(m.id) ?? 0 }))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
+  const i = standing.findIndex((m) => m.id === memberId);
+  if (i < 0 || standing.length < 2) return [];
+  const pick =
+    i === 0
+      ? [1, 2]
+      : i === standing.length - 1
+        ? [i - 1, i - 2]
+        : [i - 1, i + 1];
+  return pick
+    .filter((j) => j >= 0 && j < standing.length)
+    .map((j) => ({ id: standing[j].id, name: standing[j].name, place: j + 1 }));
 }
