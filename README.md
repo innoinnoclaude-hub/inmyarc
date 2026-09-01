@@ -128,13 +128,14 @@ Every task carries two ratings, both set by an admin at `/rating`:
 - **Impact** — 1-5 stars: how much it mattered
 
 ```
-score = minutes x (efficiency / 5) x (impact / 5)
+score = minutes x (efficiency / 5) x impact
 ```
 
-Both at 5 keeps the whole of the time; every point below 5 removes 20% of it.
-So 240 minutes scores 240 at 5 and 5, 192 at efficiency 4, and 86 at 3 and 3.
-A task missing either rating, or with no time recorded, scores nothing — the
-score measures rated output, not hours at a desk.
+Efficiency discounts — every point below 5 removes 20% of the time — while
+impact scales by its own value, so the top of the range is 5x the minutes. A
+240-minute task scores 1200 at 5 and 5, 960 at efficiency 4, 432 at 3 and 3,
+and 48 at 1 and 1. A task missing either rating, or with no time recorded,
+scores nothing — the score measures rated output, not hours at a desk.
 
 Neither column is in the anon role's grants, so no direct request can write
 them; both go through `set_efficiency` / `set_impact`, which verify the

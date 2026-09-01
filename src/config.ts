@@ -64,12 +64,13 @@ export function formatDuration(minutes: number | null | undefined): string {
 }
 
 /**
- * score = minutes x (efficiency / 5) x (impact / 5)
+ * score = minutes x (efficiency / 5) x impact
  *
- * Both at 5 keeps the whole of the time; every point below 5 removes 20% of
- * it. A task missing either rating scores nothing. Mirrors the SQL in
- * refresh_daily_score() — the database is the authority, this is the fallback
- * for a day whose rollup row does not exist yet.
+ * Efficiency discounts — every point below 5 removes 20% of the time — while
+ * impact scales by its own value, so the top of the range is 5x the minutes.
+ * A task missing either rating scores nothing. Mirrors the SQL in
+ * refresh_daily_score(); the database is the authority and this is the
+ * fallback for a day whose rollup row does not exist yet.
  */
 export function scoreFor(
   minutes: number | null,
@@ -77,7 +78,7 @@ export function scoreFor(
   impact: number | null,
 ): number {
   if (!minutes || !efficiency || !impact) return 0;
-  return Math.round((minutes * efficiency * impact) / 25);
+  return Math.round((minutes * efficiency * impact) / 5);
 }
 
 /** 5 -> "100%", 4 -> "80%" ... the share of the time a rating keeps. */
