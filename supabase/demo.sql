@@ -14,15 +14,15 @@ on conflict (member_id, log_date) do update
 
 -- created_by = the person  -> they logged it themselves
 -- created_by = null        -> it was assigned to them
-insert into public.entries (log_date, member_id, created_by, title, details, status, minutes, rating, remarks)
+insert into public.entries (log_date, member_id, created_by, title, details, status, minutes, efficiency, impact, remarks)
 select :'day', me.id, case when v.self then me.id else null end,
-       v.title, v.details, v.status, v.minutes, v.rating, v.remarks
+       v.title, v.details, v.status, v.minutes, v.efficiency, v.impact, v.remarks
 from (values
- ('Veni',   true,  'Closed out the Q3 activation deck','Final numbers are in slide 9','done',    150,  5,    'Board-ready, no changes needed.'),
- ('Veni',   true,  'Interviewed two design candidates', null,                          'done',    45,   null, null),
- ('Harsh',  true,  'Shipped the billing migration','Backfilled ~40k rows, zero downtime','done',  485,  4,    null),
- ('Harsh',  true,  'Started on webhook retry handling','Capped at six attempts',       'rework',  90,   null, 'Needs a dead-letter path before merge.'),
- ('Ashish', true,  'Fixed the mobile nav overlap',null,                                'done',    60,   null, null),
- ('Amogh',  false, 'Pull the churn numbers for the board deck','Split by plan tier',   'not_done',null, null, null)
-) as v(owner,self,title,details,status,minutes,rating,remarks)
+ ('Veni',   true,  'Closed out the Q3 activation deck','Final numbers are in slide 9','done', 150, 5, 5, 'Board-ready, no changes needed.'),
+ ('Veni',   true,  'Interviewed two design candidates', null,                          'done', 45, null, null, null),
+ ('Harsh',  true,  'Shipped the billing migration','Backfilled ~40k rows, zero downtime','done', 485, 4, 4, null),
+ ('Harsh',  true,  'Started on webhook retry handling','Capped at six attempts',       'rework', 90, null, null, 'Needs a dead-letter path before merge.'),
+ ('Ashish', true,  'Fixed the mobile nav overlap',null,                                'done', 60, null, null, null),
+ ('Amogh',  false, 'Pull the churn numbers for the board deck','Split by plan tier',   'not_done', null, null, null, null)
+) as v(owner,self,title,details,status,minutes,efficiency,impact,remarks)
 join public.members me on me.name = v.owner;

@@ -26,7 +26,10 @@ export interface Entry {
   details: string | null;
   status: StatusKey;
   minutes: number | null;
-  rating: number | null;
+  /** 1-5 slider: how well it was done. */
+  efficiency: number | null;
+  /** 1-5 stars: how much it mattered. */
+  impact: number | null;
   remarks: string | null;
   status_by: string | null;
   status_at: string | null;

@@ -52,7 +52,8 @@ create table if not exists public.entries (
   status        text not null default 'not_done'
                 check (status in ('done','not_done','rework')),
   minutes       integer check (minutes is null or (minutes >= 0 and minutes <= 1440)),
-  rating        smallint check (rating is null or rating between 1 and 5),
+  efficiency    smallint check (efficiency is null or efficiency between 1 and 5), -- 1-5 slider
+  impact        smallint check (impact is null or impact between 1 and 5),         -- 1-5 stars
   remarks       text check (remarks is null or length(remarks) <= 500),
   status_by     uuid references public.members(id) on delete restrict,
   status_at     timestamptz,

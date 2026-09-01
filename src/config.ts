@@ -62,3 +62,25 @@ export function formatDuration(minutes: number | null | undefined): string {
   if (!m) return `${h}h`;
   return `${h}h ${m}m`;
 }
+
+/**
+ * score = minutes x (efficiency / 5) x (impact / 5)
+ *
+ * Both at 5 keeps the whole of the time; every point below 5 removes 20% of
+ * it. A task missing either rating scores nothing. Mirrors the SQL in
+ * refresh_daily_score() — the database is the authority, this is the fallback
+ * for a day whose rollup row does not exist yet.
+ */
+export function scoreFor(
+  minutes: number | null,
+  efficiency: number | null,
+  impact: number | null,
+): number {
+  if (!minutes || !efficiency || !impact) return 0;
+  return Math.round((minutes * efficiency * impact) / 25);
+}
+
+/** 5 -> "100%", 4 -> "80%" ... the share of the time a rating keeps. */
+export function weightPercent(value: number | null): string {
+  return value ? `${value * 20}%` : "—";
+}

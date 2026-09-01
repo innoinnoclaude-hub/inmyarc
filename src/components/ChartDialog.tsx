@@ -57,12 +57,15 @@ export function ChartDialog({
       }),
       { tasks: 0, done: 0, minutes: 0, score: 0 },
     );
-    const rated = series.filter((b) => b.avg !== null);
-    const avg = rated.length
-      ? rated.reduce((s, b) => s + (b.avg ?? 0) * b.tasks, 0) /
-        (rated.reduce((s, b) => s + b.tasks, 0) || 1)
+    const rated = series.filter((b) => b.avgImpact !== null);
+    const weight = rated.reduce((s, b) => s + b.tasks, 0) || 1;
+    const avgImpact = rated.length
+      ? rated.reduce((s, b) => s + (b.avgImpact ?? 0) * b.tasks, 0) / weight
       : null;
-    return { ...t, avg };
+    const avgEfficiency = rated.length
+      ? rated.reduce((s, b) => s + (b.avgEfficiency ?? 0) * b.tasks, 0) / weight
+      : null;
+    return { ...t, avgImpact, avgEfficiency };
   }, [series]);
 
   const from = rangeStart(grain);
@@ -118,9 +121,22 @@ export function ChartDialog({
           <Tile label="Tasks" value={`${totals.done} / ${totals.tasks}`} foot="done" />
           <Tile label="Time logged" value={formatDuration(totals.minutes)} />
           <Tile
-            label="Avg rating"
-            value={totals.avg !== null ? totals.avg.toFixed(2) : "—"}
-            stars={totals.avg}
+            label="Avg efficiency"
+            value={
+              totals.avgEfficiency !== null
+                ? totals.avgEfficiency.toFixed(2)
+                : "—"
+            }
+            foot={
+              totals.avgEfficiency !== null
+                ? `keeps ${Math.round(totals.avgEfficiency * 20)}% of time`
+                : undefined
+            }
+          />
+          <Tile
+            label="Avg impact"
+            value={totals.avgImpact !== null ? totals.avgImpact.toFixed(2) : "—"}
+            stars={totals.avgImpact}
           />
           <Tile
             label="Avg rank"
@@ -164,7 +180,7 @@ export function ChartDialog({
 
         {isTeam && hasAny && !loading && !error && (
           <div data-stagger>
-            <Label hint="over the whole range">Ranking</Label>
+            <Label hint="score / efficiency-impact / time">Ranking</Label>
             <div className="overflow-hidden rounded-sm border border-line">
               {board.map((row, i) => {
                 const top = board[0]?.score || 1;
@@ -194,7 +210,9 @@ export function ChartDialog({
                       {row.score.toLocaleString("en-IN")}
                     </span>
                     <span className="tnum hidden w-14 shrink-0 text-right text-[11.5px] text-ink-4 sm:block">
-                      {row.avg !== null ? `${row.avg.toFixed(1)}/5` : "—"}
+                      {row.avgEfficiency !== null && row.avgImpact !== null
+                        ? `${row.avgEfficiency.toFixed(1)}/${row.avgImpact.toFixed(1)}`
+                        : "—"}
                     </span>
                     <span className="tnum hidden w-16 shrink-0 text-right text-[11.5px] text-ink-4 sm:block">
                       {formatDuration(row.minutes)}
@@ -343,9 +361,15 @@ export function BarChart({
                     <dd className="text-right font-medium text-ink-2">
                       {formatDuration(b.minutes)}
                     </dd>
-                    <dt>Rating</dt>
+                    <dt>Efficiency</dt>
                     <dd className="text-right font-medium text-ink-2">
-                      {b.avg !== null ? `${b.avg.toFixed(2)} / 5` : "—"}
+                      {b.avgEfficiency !== null
+                        ? `${b.avgEfficiency.toFixed(2)} / 5`
+                        : "—"}
+                    </dd>
+                    <dt>Impact</dt>
+                    <dd className="text-right font-medium text-ink-2">
+                      {b.avgImpact !== null ? `${b.avgImpact.toFixed(2)} / 5` : "—"}
                     </dd>
                     {ranks && (
                       <>

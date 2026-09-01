@@ -47,7 +47,7 @@ the SPA rewrite.
 ## Row order
 
 The board is alphabetical until the first entry of the day. From then on it
-ranks people by **score = sum of (minutes taken x stars)** across their tasks,
+ranks people by **score** across their tasks,
 highest first, and the first column reads *Rank* instead of *#*. Places are
 **DENSE_RANK**: equal scores share a place and the next follows immediately
 (1, 2, 2, 3 — never 1, 2, 2, 4). The same applies to *Avg rank* in the graph. Tasks with no
@@ -120,13 +120,33 @@ passcode is only as private as the people who know it.
 `vercel.json` already rewrites everything to `index.html`, so `/rating` works
 on a deployed build.
 
+## Scoring
+
+Every task carries two ratings, both set by an admin at `/rating`:
+
+- **Efficiency** — a 1-5 slider: how well it was done
+- **Impact** — 1-5 stars: how much it mattered
+
+```
+score = minutes x (efficiency / 5) x (impact / 5)
+```
+
+Both at 5 keeps the whole of the time; every point below 5 removes 20% of it.
+So 240 minutes scores 240 at 5 and 5, 192 at efficiency 4, and 86 at 3 and 3.
+A task missing either rating, or with no time recorded, scores nothing — the
+score measures rated output, not hours at a desk.
+
+Neither column is in the anon role's grants, so no direct request can write
+them; both go through `set_efficiency` / `set_impact`, which verify the
+passcode inside the database.
+
 ## Data model
 
 | table      | what it holds                                                     |
 | ---------- | ----------------------------------------------------------------- |
 | `members`  | the roster behind every dropdown; `active = false` retires someone |
 | `day_logs` | one row per member per day — attendance + an optional note         |
-| `entries`  | every task: whose it is, verdict, time taken, rating, remarks       |
+| `entries`  | every task: whose it is, verdict, time, efficiency, impact, remarks |
 | `daily_scores` | trigger-maintained per-person, per-day rollup behind the graph |
 
 An entry with `created_by = null` was assigned to that person; a non-null
