@@ -482,3 +482,95 @@ export function neighbours(
     .filter((j) => j >= 0 && j < standing.length)
     .map((j) => ({ id: standing[j].id, name: standing[j].name, place: j + 1 }));
 }
+
+/* --------------------------- selectable series --------------------------- */
+
+/** One point on the trend chart, whatever the grain. */
+export interface SeriesPoint {
+  key: string;
+  label: string;
+  score: number;
+  tasks: number;
+  efficiency: number | null;
+  impact: number | null;
+  /** Position that day, or the mean over the active days of that week. */
+  position: number | null;
+}
+
+/** Every Monday that has a day inside this month, oldest first. */
+export function weeksInMonth(monthStart: string): string[] {
+  const [y, m] = monthStart.split("-").map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const out: string[] = [];
+  let cursor = shiftISO(monthStart, -(weekdayOf(monthStart) - 1));
+  const last = shiftISO(monthStart, days - 1);
+  while (cursor <= last) {
+    out.push(cursor);
+    cursor = shiftISO(cursor, 7);
+  }
+  return out;
+}
+
+export function daysInWeek(monday: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => shiftISO(monday, i));
+}
+
+const WEEKDAY_LABEL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function pointFor(
+  rows: ScoreRow[],
+  ranks: Map<string, Map<string, number>>,
+  memberId: string,
+  dates: string[],
+  key: string,
+  label: string,
+): SeriesPoint {
+  const mine = rows.filter(
+    (r) => r.member_id === memberId && dates.includes(r.log_date) && r.tasks > 0,
+  );
+  const rated = mine.reduce((s, r) => s + r.rated, 0);
+  let rankSum = 0;
+  let rankDays = 0;
+  for (const d of dates) {
+    const r = ranks.get(d)?.get(memberId);
+    if (r != null && mine.some((x) => x.log_date === d)) {
+      rankSum += r;
+      rankDays++;
+    }
+  }
+  return {
+    key,
+    label,
+    score: mine.reduce((s, r) => s + r.score, 0),
+    tasks: mine.reduce((s, r) => s + r.tasks, 0),
+    efficiency: rated
+      ? mine.reduce((s, r) => s + r.efficiency_sum, 0) / rated
+      : null,
+    impact: rated ? mine.reduce((s, r) => s + r.impact_sum, 0) / rated : null,
+    position: rankDays ? rankSum / rankDays : null,
+  };
+}
+
+/** One point per week. */
+export function pointsForWeeks(
+  rows: ScoreRow[],
+  memberId: string,
+  mondays: string[],
+): SeriesPoint[] {
+  const ranks = dailyRanks(rows);
+  return mondays.map((monday) =>
+    pointFor(rows, ranks, memberId, daysInWeek(monday), monday, monday),
+  );
+}
+
+/** One point per day of a single week, Monday first. */
+export function pointsForDays(
+  rows: ScoreRow[],
+  memberId: string,
+  monday: string,
+): SeriesPoint[] {
+  const ranks = dailyRanks(rows);
+  return daysInWeek(monday).map((date, i) =>
+    pointFor(rows, ranks, memberId, [date], date, WEEKDAY_LABEL[i]),
+  );
+}

@@ -6,7 +6,7 @@ import {
   formatDuration,
   type StatusKey,
 } from "../config";
-import { clock, dateShort } from "../lib/date";
+import { clock, dateShort, startOfMonth, todayISO } from "../lib/date";
 import {
   attendanceSpread,
   averagePosition,
@@ -282,6 +282,8 @@ export function MemberProfile({
 }) {
   const { data, loading, error } = useProfile(member);
   const { entries, dayLogs, rows, members } = data;
+  // one month drives both the calendar and the chart under it
+  const [month, setMonth] = useState(() => startOfMonth(todayISO()));
 
   const t = useMemo(() => totals(entries), [entries]);
   const mineAvg = useMemo(() => memberPerDay(rows, member.id), [rows, member.id]);
@@ -423,11 +425,21 @@ export function MemberProfile({
               entries={entries}
               memberId={member.id}
               teamSize={teamSize}
+              month={month}
+              onMonthChange={setMonth}
             />
           </Section>
 
-          <Section title="By week" hint="last 12 weeks">
-            <ProfileTrend rows={rows} member={member} members={members} />
+          <Section
+            title="Trend"
+            hint="follows the month above — switch to day for a single week"
+          >
+            <ProfileTrend
+              rows={rows}
+              member={member}
+              members={members}
+              month={month}
+            />
           </Section>
 
           <div className="grid gap-5 lg:grid-cols-2">

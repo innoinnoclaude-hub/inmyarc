@@ -157,10 +157,16 @@ the back of the pack through orange and yellow to green at the front — so a
 month reads as form rather than volume. Beside it sits the month at a glance;
 click any square and it becomes that day's tasks.
 
-Then **by week**, with four tabs — score, efficiency, impact and position.
+Then the **trend**, which follows whichever month the calendar is showing. Four
+metrics — score, efficiency, impact and position — and a **week / day** toggle.
+In week mode the axis is that month's weeks; switch to day and a dropdown picks
+one of them, giving Monday to Sunday for that week. Weeks are labelled by their
+full span because the first and last week of a month spill into the neighbouring
+one.
+
 Position is a line chart with 1 at the top, plotted against the two people
-either side of them in the all-time standing, so you can see whether a good week
-was actually good relative to close rivals.
+either side in the all-time standing, so a week can be read against close rivals
+rather than in isolation.
 
 Then the shape of their week, how the work splits, the spread of ratings they
 have been given, and recent tasks.
