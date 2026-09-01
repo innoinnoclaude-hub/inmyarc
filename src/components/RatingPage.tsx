@@ -5,9 +5,10 @@ import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/dat
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
 import { downloadDayReport } from "../lib/report";
-import type { Entry } from "../lib/types";
+import type { Entry, Member } from "../lib/types";
 import { useToast } from "./Toaster";
 import { EditEntryDialog } from "./EditEntryDialog";
+import { MemberProfile } from "./MemberProfile";
 import { EntryDialog, type DialogTab } from "./EntryDialog";
 import { LogTable } from "./LogTable";
 import { Summary } from "./Summary";
@@ -107,6 +108,7 @@ function Board() {
   const { passcode, lock } = usePasscode();
   const [date, setDate] = useState(todayISO);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [profile, setProfile] = useState<Member | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [adding, setAdding] = useState<{
     open: boolean;
@@ -271,6 +273,7 @@ function Board() {
         onAttendance={(m, a) =>
           void guard(() => d.setAttendance(m, a), "Day updated.")
         }
+        onMember={setProfile}
         onAddFor={(memberId) =>
           setAdding({ open: true, tab: "day", member: memberId })
         }
@@ -289,6 +292,16 @@ function Board() {
         onSubmitDay={d.submitDay}
         onAssign={d.assignTask}
       />
+
+      {profile && (
+        <MemberProfile
+          key={profile.id}
+          member={profile}
+          onClose={() => setProfile(null)}
+          rankToday={d.groups.find((g) => g.member.id === profile.id)?.rank}
+          scoreToday={d.groups.find((g) => g.member.id === profile.id)?.score}
+        />
+      )}
 
       {editing && (
         <EditEntryDialog

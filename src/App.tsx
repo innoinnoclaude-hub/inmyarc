@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { APP } from "./config";
 import { clock, todayISO } from "./lib/date";
 import { isConfigured } from "./lib/supabase";
-import type { Entry } from "./lib/types";
+import type { Entry, Member } from "./lib/types";
 import { useDashboard } from "./lib/useDashboard";
 import { PasscodeProvider } from "./lib/passcode";
 import { ChartDialog } from "./components/ChartDialog";
 import { RatingPage } from "./components/RatingPage";
 import { EditEntryDialog } from "./components/EditEntryDialog";
+import { MemberProfile } from "./components/MemberProfile";
 import { EntryDialog, type DialogTab } from "./components/EntryDialog";
 import { Header } from "./components/Header";
 import { LogTable } from "./components/LogTable";
@@ -31,6 +32,7 @@ function Portal() {
   }>({ open: false, tab: "day", member: null });
   const [chartOpen, setChartOpen] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [profile, setProfile] = useState<Member | null>(null);
   const [syncedAt, setSyncedAt] = useState<string>(() =>
     new Date().toISOString(),
   );
@@ -148,6 +150,7 @@ function Portal() {
           onAttendance={(m, a) =>
             void guard(() => d.setAttendance(m, a), "Day updated.")
           }
+          onMember={setProfile}
           onAddFor={(memberId) =>
             setDialog({
               open: true,
@@ -178,6 +181,16 @@ function Portal() {
           Add entry
         </Button>
       </div>
+
+      {profile && (
+        <MemberProfile
+          key={profile.id}
+          member={profile}
+          onClose={() => setProfile(null)}
+          rankToday={d.groups.find((g) => g.member.id === profile.id)?.rank}
+          scoreToday={d.groups.find((g) => g.member.id === profile.id)?.score}
+        />
+      )}
 
       {editing && (
         <EditEntryDialog
