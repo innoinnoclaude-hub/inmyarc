@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -438,9 +438,12 @@ export function Download({ className }: IconProps) {
 /* ------------------------------- efficiency ------------------------------ */
 
 /**
- * A 1-5 slider. Read-only it renders as a five segment meter, which stays
- * legible in a dense table row; editable it is a real range input so it can be
- * dragged or driven with the arrow keys.
+ * A 1-5 slider driven by pointer events rather than <input type="range">.
+ * The native control snaps in coarse jumps and styles inconsistently across
+ * browsers; this one follows the pointer exactly, snaps to the nearest stop,
+ * captures the pointer so a drag survives leaving the track, and takes arrow
+ * keys. Read-only it collapses to a five segment meter that stays legible in a
+ * dense table row.
  */
 export function Slider({
   value,
@@ -453,24 +456,25 @@ export function Slider({
   readOnly?: boolean;
   ariaLabel?: string;
 }) {
-  const meter = (
-    <span className="inline-flex items-center gap-[3px]">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span
-          key={n}
-          className={cx(
-            "h-[9px] w-[7px] rounded-[1px]",
-            value && n <= value ? "bg-ink" : "bg-line-strong",
-          )}
-        />
-      ))}
-    </span>
-  );
+  const track = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
+  const shown = preview ?? value;
 
   if (readOnly) {
     return (
       <span className="inline-flex items-center gap-2">
-        {meter}
+        <span className="inline-flex items-center gap-[3px]">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <span
+              key={n}
+              className={cx(
+                "h-[9px] w-[7px] rounded-[1px]",
+                value && n <= value ? "bg-ink" : "bg-line-strong",
+              )}
+            />
+          ))}
+        </span>
         <span className="tnum text-[11.5px] font-medium text-ink-3">
           {value ? `${value}/5` : "\u2014"}
         </span>
@@ -478,29 +482,98 @@ export function Slider({
     );
   }
 
+  const at = (clientX: number) => {
+    const el = track.current;
+    if (!el) return 1;
+    const r = el.getBoundingClientRect();
+    const t = Math.min(Math.max((clientX - r.left) / r.width, 0), 1);
+    return Math.round(t * 4) + 1;
+  };
+
+  const commit = (next: number) => {
+    setPreview(next);
+    if (next !== value) onChange(next);
+  };
+
   return (
-    <span className="inline-flex items-center gap-2">
-      <input
-        type="range"
-        min={1}
-        max={5}
-        step={1}
-        value={value ?? 1}
+    <span className="inline-flex items-center gap-2 select-none">
+      <div
+        ref={track}
+        role="slider"
+        tabIndex={0}
         aria-label={ariaLabel}
-        onChange={(e) => onChange(Number(e.target.value))}
+        aria-valuemin={1}
+        aria-valuemax={5}
+        aria-valuenow={value ?? undefined}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setDragging(true);
+          commit(at(e.clientX));
+        }}
+        onPointerMove={(e) => {
+          if (!dragging) return;
+          const next = at(e.clientX);
+          if (next !== shown) commit(next);
+        }}
+        onPointerUp={(e) => {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+          setDragging(false);
+          setPreview(null);
+        }}
+        onPointerCancel={() => {
+          setDragging(false);
+          setPreview(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+            e.preventDefault();
+            commit(Math.min((value ?? 0) + 1, 5));
+          }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+            e.preventDefault();
+            commit(Math.max((value ?? 2) - 1, 1));
+          }
+          if (e.key === "Backspace" || e.key === "Delete") onChange(null);
+        }}
         className={cx(
-          "focus-ring h-[14px] w-[62px] cursor-pointer appearance-none bg-transparent",
-          "[&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:bg-line-strong",
-          "[&::-webkit-slider-thumb]:mt-[-4.5px] [&::-webkit-slider-thumb]:h-[11px] [&::-webkit-slider-thumb]:w-[11px]",
-          "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-[2px] [&::-webkit-slider-thumb]:bg-ink",
-          "[&::-moz-range-track]:h-[3px] [&::-moz-range-track]:bg-line-strong",
-          "[&::-moz-range-thumb]:h-[11px] [&::-moz-range-thumb]:w-[11px] [&::-moz-range-thumb]:rounded-[2px]",
-          "[&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-ink",
-          !value && "opacity-45",
+          "focus-ring relative h-5 w-[72px] cursor-pointer touch-none",
+          dragging && "cursor-grabbing",
         )}
-      />
+      >
+        {/* rail */}
+        <span className="absolute top-1/2 left-0 h-[3px] w-full -translate-y-1/2 rounded-[1px] bg-line-strong" />
+        {/* filled portion */}
+        {shown != null && (
+          <span
+            style={{ width: `${((shown - 1) / 4) * 100}%` }}
+            className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-[1px] bg-ink transition-[width] duration-100 ease-out"
+          />
+        )}
+        {/* stops */}
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            key={n}
+            style={{ left: `${((n - 1) / 4) * 100}%` }}
+            className={cx(
+              "absolute top-1/2 size-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full",
+              shown != null && n <= shown ? "bg-surface" : "bg-ink-4/60",
+            )}
+          />
+        ))}
+        {/* thumb */}
+        {shown != null && (
+          <span
+            style={{ left: `${((shown - 1) / 4) * 100}%` }}
+            className={cx(
+              "absolute top-1/2 size-[12px] -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-ink bg-ink transition-[left] duration-100 ease-out",
+              dragging && "scale-110",
+            )}
+          />
+        )}
+      </div>
       <span className="tnum w-7 text-[11.5px] font-medium text-ink-2">
-        {value ? `${value}/5` : "\u2014"}
+        {shown ? `${shown}/5` : "\u2014"}
       </span>
       {value != null && (
         <button

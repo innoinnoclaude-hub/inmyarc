@@ -45,6 +45,7 @@ interface Props {
   onDelete: (entryId: string) => void;
   onAttendance: (memberId: string, attendance: AttendanceKey) => void;
   onAddFor: (memberId: string) => void;
+  onMember: (member: Member) => void;
 }
 
 const COLS = [
@@ -76,6 +77,7 @@ export function LogTable({
   onDelete,
   onAttendance,
   onAddFor,
+  onMember,
 }: Props) {
   const frozen = !canEditTasks;
   const root = useRef<HTMLDivElement>(null);
@@ -199,9 +201,14 @@ export function LogTable({
                           className="border-r border-line px-3 py-3 align-top"
                         >
                           <div className="flex items-baseline gap-1.5">
-                            <span className="text-[13.5px] font-semibold tracking-[-0.01em] text-ink">
+                            <button
+                              type="button"
+                              onClick={() => onMember(group.member)}
+                              title={`Open ${group.member.name}'s stats`}
+                              className="focus-ring rounded-xs text-left text-[13.5px] font-semibold tracking-[-0.01em] text-ink underline decoration-transparent underline-offset-2 transition hover:decoration-ink-4"
+                            >
                               {group.member.name}
-                            </span>
+                            </button>
                             {isMe && (
                               <span className="text-[10px] font-semibold tracking-[0.08em] text-ink-4 uppercase">
                                 you

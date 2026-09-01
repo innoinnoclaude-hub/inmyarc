@@ -141,6 +141,19 @@ Neither column is in the anon role's grants, so no direct request can write
 them; both go through `set_efficiency` / `set_impact`, which verify the
 passcode inside the database.
 
+## Person view
+
+Clicking a name in the table opens that person's profile over the last 84 days:
+headline numbers (score, points per hour, tasks, time, average efficiency and
+impact, current streak), an activity strip, a 12-week score trend, the shape of
+their week, how the work splits by status / assigned / attendance, the spread of
+ratings they have been given, and their recent tasks. It also calls out their
+sharpest weekday by efficiency, their biggest weekday by points, and their best
+single day.
+
+All of it is derived from the entries themselves in `src/lib/profile.ts`, which
+is pure and exported so the maths can be checked against SQL.
+
 ## Data model
 
 | table      | what it holds                                                     |
