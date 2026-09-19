@@ -34,6 +34,9 @@ interface State {
   dayLogs: DayLog[];
   entries: Entry[];
   scores: DayScore[];
+  /** First day the board may write, from `editable_from()` in the database.
+   *  Null until it loads, which leaves only today open. */
+  openFrom: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -43,9 +46,20 @@ const EMPTY: State = {
   dayLogs: [],
   entries: [],
   scores: [],
+  openFrom: null,
   loading: true,
   error: null,
 };
+
+/**
+ * True for a day the board can write directly: from `openFrom` through today.
+ * Mirrors the RLS policies, which read the same `editable_from()`, so the UI
+ * never offers an edit the database would refuse.
+ */
+export function isOpenDay(day: string, openFrom: string | null): boolean {
+  const today = todayISO();
+  return day <= today && day >= (openFrom ?? today);
+}
 
 function message(e: unknown): string {
   if (!e) return "Something went wrong.";
@@ -129,9 +143,10 @@ export function buildGroups(
 }
 
 /**
- * `passcode` is null until someone unlocks a past day. Writes to today go
- * straight at the tables; writes to a locked day go through the passcode-gated
- * functions instead, because RLS refuses the direct route.
+ * `passcode` is null on the board and set on /rating. Writes to an open day
+ * (see `isOpenDay`) go straight at the tables; writes to a locked day go
+ * through the passcode-gated functions instead, because RLS refuses the direct
+ * route.
  */
 export function useDashboard(date: string, passcode: string | null) {
   const [state, setState] = useState<State>(EMPTY);
@@ -141,8 +156,10 @@ export function useDashboard(date: string, passcode: string | null) {
   const passRef = useRef(passcode);
   passRef.current = passcode;
 
-  /** A past day is locked; only today is directly writable. */
-  const locked = date !== todayISO();
+  /** Outside the open window the day is locked for direct writes. */
+  const locked = !isOpenDay(date, state.openFrom);
+  const openFromRef = useRef(state.openFrom);
+  openFromRef.current = state.openFrom;
   // Read through a ref inside the mutations: they are memoised on `run` alone,
   // so a plain closure over `locked` would keep whatever it was at mount and a
   // past-day write would silently take the direct route and be dropped by RLS.
@@ -182,7 +199,7 @@ export function useDashboard(date: string, passcode: string | null) {
       const target = dateRef.current;
       if (!opts.quiet) setState((s) => ({ ...s, loading: true, error: null }));
       try {
-        const [m, d, e, sc] = await Promise.all([
+        const [m, d, e, sc, win] = await Promise.all([
           supabase
             .from("members")
             .select("id,name,title,active")
@@ -202,20 +219,25 @@ export function useDashboard(date: string, passcode: string | null) {
             .from("daily_scores")
             .select("member_id,score")
             .eq("log_date", target),
+          supabase.rpc("editable_from"),
         ]);
         if (m.error) throw m.error;
         if (d.error) throw d.error;
         if (e.error) throw e.error;
         if (sc.error) throw sc.error;
         if (dateRef.current !== target) return; // a newer date won the race
-        setState({
+        setState((s) => ({
           members: (m.data ?? []) as Member[],
           dayLogs: (d.data ?? []) as DayLog[],
           entries: (e.data ?? []) as Entry[],
           scores: (sc.data ?? []) as DayScore[],
+          // if the window can't be read, keep the last known one rather than
+          // failing the whole board — the database still enforces it
+          openFrom:
+            !win.error && typeof win.data === "string" ? win.data : s.openFrom,
           loading: false,
           error: null,
-        });
+        }));
       } catch (err) {
         setState((s) => ({ ...s, loading: false, error: message(err) }));
       }
@@ -384,7 +406,7 @@ export function useDashboard(date: string, passcode: string | null) {
       details: string;
     }) =>
       run(async () => {
-        if (input.logDate !== todayISO()) {
+        if (!isOpenDay(input.logDate, openFromRef.current)) {
           const { error } = await supabase.rpc("admin_insert_entry", {
             p_pass: needPass(),
             p_log_date: input.logDate,

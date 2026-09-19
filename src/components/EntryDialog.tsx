@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ATTENDANCE, STATUS, type AttendanceKey, type StatusKey } from "../config";
-import { dateLong, todayISO } from "../lib/date";
+import { dateLong, dateShort, todayISO } from "../lib/date";
 import type { DraftEntry } from "../lib/useDashboard";
 import type { DayLog, Member } from "../lib/types";
 import { Dialog } from "./Dialog";
@@ -34,6 +34,7 @@ export function EntryDialog({
   members,
   dayLogs,
   date,
+  onDateChange,
   identity,
   onIdentity,
   initialTab,
@@ -47,12 +48,16 @@ export function EntryDialog({
   members: Member[];
   dayLogs: DayLog[];
   date: string;
+  /** Moves the page to another day. When given, "My day" gets a date field so
+   *  someone can backfill without paging back one day at a time. */
+  onDateChange?: (next: string) => void;
   identity: string | null;
   onIdentity: (id: string) => void;
   initialTab: DialogTab;
   initialMember: string | null;
-  /** Earliest day the assign tab may target. The board pins this to today;
-   *  the admin page leaves it open so a past day can be corrected. */
+  /** Earliest day either tab may target. The board pins this to the start of
+   *  its open window; the admin page leaves it open so any day can be
+   *  corrected. */
   minDate?: string;
   onSubmitDay: (input: {
     memberId: string;
@@ -82,12 +87,19 @@ export function EntryDialog({
   const [assignDetails, setAssignDetails] = useState("");
   const [assignDate, setAssignDate] = useState(date);
 
+  // `dayLogs` belongs to the page's day and lags a date change until it
+  // reloads, so match on the date too rather than trust whatever is loaded
   const existing = useMemo(
-    () => dayLogs.find((d) => d.member_id === memberId) ?? null,
-    [dayLogs, memberId],
+    () =>
+      dayLogs.find((d) => d.member_id === memberId && d.log_date === date) ??
+      null,
+    [dayLogs, memberId, date],
   );
 
-  // (re)seed the form each time the dialog opens
+  // (re)seed the form each time the dialog opens — but not when the date field
+  // moves the page, or it would wipe the entries someone is typing
+  const dateNow = useRef(date);
+  dateNow.current = date;
   useEffect(() => {
     if (!open) return;
     const me = identity ?? "";
@@ -96,7 +108,7 @@ export function EntryDialog({
     setDrafts([blank()]);
     setAssignTitle("");
     setAssignDetails("");
-    setAssignDate(date);
+    setAssignDate(dateNow.current);
     if (initialTab === "assign") {
       setAssignTo(initialMember ?? "");
       setMemberId(me);
@@ -104,7 +116,13 @@ export function EntryDialog({
       setMemberId(initialMember ?? me);
       setAssignTo("");
     }
-  }, [open, initialTab, initialMember, identity, date]);
+  }, [open, initialTab, initialMember, identity]);
+
+  const maxDate = todayISO();
+  /** Accept a picked day only inside [minDate, today]; typing into a date
+   *  field can produce anything. */
+  const inRange = (v: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(v) && v <= maxDate && (!minDate || v >= minDate);
 
   /**
    * Seed attendance from whatever is already saved for that person — but only
@@ -112,7 +130,7 @@ export function EntryDialog({
    * live refresh from a teammate never wipes what someone is mid-way through
    * typing.
    */
-  const seedKey = `${memberId}:${existing ? "saved" : "new"}`;
+  const seedKey = `${date}:${memberId}:${existing ? "saved" : "new"}`;
   const seeded = useRef<string | null>(null);
   useEffect(() => {
     if (!open) {
@@ -234,7 +252,13 @@ export function EntryDialog({
 
       {tab === "day" ? (
         <div className="flex flex-col gap-5">
-          <div className="grid gap-4 sm:grid-cols-2" data-stagger>
+          <div
+            className={cx(
+              "grid gap-4",
+              onDateChange ? "sm:grid-cols-[1fr_150px_1fr]" : "sm:grid-cols-2",
+            )}
+            data-stagger
+          >
             <div>
               <Label htmlFor="who">Your name</Label>
               <Select
@@ -250,6 +274,27 @@ export function EntryDialog({
                 ))}
               </Select>
             </div>
+            {onDateChange && (
+              <div>
+                <Label
+                  htmlFor="day"
+                  hint={minDate ? `from ${dateShort(minDate)}` : undefined}
+                >
+                  Day
+                </Label>
+                <TextInput
+                  id="day"
+                  type="date"
+                  value={date}
+                  min={minDate}
+                  max={maxDate}
+                  onChange={(e) => {
+                    if (inRange(e.target.value)) onDateChange(e.target.value);
+                  }}
+                  className="tnum"
+                />
+              </div>
+            )}
             <div>
               <Label htmlFor="note" hint="optional">
                 Day note
@@ -366,7 +411,10 @@ export function EntryDialog({
           </div>
 
           <div data-stagger>
-            <Label htmlFor="on" hint={minDate ? "today only" : undefined}>
+            <Label
+              htmlFor="on"
+              hint={minDate ? `from ${dateShort(minDate)}` : undefined}
+            >
               For the day
             </Label>
             <TextInput
@@ -374,8 +422,10 @@ export function EntryDialog({
               type="date"
               value={assignDate}
               min={minDate}
-              max={todayISO()}
-              onChange={(e) => setAssignDate(e.target.value || date)}
+              max={maxDate}
+              onChange={(e) => {
+                if (inRange(e.target.value)) setAssignDate(e.target.value);
+              }}
               className="tnum"
             />
           </div>
@@ -408,8 +458,8 @@ export function EntryDialog({
           <p className="text-[11.5px] leading-[1.5] text-ink-3" data-stagger>
             The task lands in their row for that day as{" "}
             <span className="font-medium text-ink-2">Not done</span>. Anyone can
-            move it to Done or Rework required, rate it and leave a remark
-            straight from the table.
+            move it to Done or Rework required and leave a remark straight from
+            the table; an admin rates it.
           </p>
         </div>
       )}

@@ -37,8 +37,8 @@ export function Header({
   onRefresh: () => void;
   busy: boolean;
   identity: string | null;
-  /** True whenever the viewed day is not today. Past days are permanently
-   *  read-only here; corrections are made by an admin at /rating. */
+  /** True for a day outside the open window (editable_from() through today).
+   *  Those are read-only here; corrections are made by an admin at /rating. */
   locked: boolean;
 }) {
   const root = useRef<HTMLElement>(null);
@@ -94,8 +94,10 @@ export function Header({
             <Chip tone="ok" dot>
               Today
             </Chip>
-          ) : (
+          ) : locked ? (
             <Chip tone="mute">Archive</Chip>
+          ) : (
+            <Chip tone="live">Open for backfill</Chip>
           )}
           {isWeekend(date) && <Chip tone="mute">Weekend</Chip>}
           {locked && <Chip tone="mute">View only</Chip>}

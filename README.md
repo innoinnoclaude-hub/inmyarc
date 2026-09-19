@@ -3,9 +3,10 @@
 A single-page internal portal. Everyone picks their name, marks how the day
 went, and adds one entry per task. Anyone can assign a task to a teammate, and
 anyone can mark a task validated. The board is scoped to one day and rolls over
-at midnight (Asia/Kolkata). Every task carries a Done / Not done / Rework
-required verdict, the time it took, a five-star rating and remarks — all
-editable straight from the table.
+at midnight (Asia/Kolkata); any day from 1 September 2026 to today can still be
+filled in. Every task carries a Done / Not done / Rework required verdict, the
+time it took and remarks — all editable straight from the table — plus an
+efficiency and an impact rating set by an admin.
 
 Frontend only — React + Tailwind v4 + GSAP, talking straight to Supabase.
 No server to run, deploys to Vercel as a static site.
@@ -18,10 +19,19 @@ No server to run, deploys to Vercel as a static site.
    npm install
    ```
 
-2. **Database** — already applied to this project. For a fresh project, run
-   `supabase/schema.sql` (Supabase Dashboard → SQL Editor), then the names in
-   `supabase/seed.sql`. `supabase/migrations/` holds the two changes made after
-   the first cut, both already folded into `schema.sql`.
+2. **Database** — already applied to this project. `schema.sql` is only the
+   base: on its own it has no day locking, passcode, admin functions or score
+   rollup. For a fresh project, run these in the Supabase SQL editor, in order:
+
+   1. `supabase/schema.sql`
+   2. `supabase/seed.sql`
+   3. `supabase/migrations/` **0006 through 0014** — skip 0002–0005, which are
+      already folded into `schema.sql`
+   4. set the admin passcode (see *Locking and the passcode*); 0007 seeds a
+      random one nobody knows
+
+   New migrations must run both on the live project and on a fresh build, so
+   guard renames and drops with an existence check.
 
 3. **Environment** — copy `.env.example` to `.env.local` and fill in:
 
@@ -50,8 +60,8 @@ The board is alphabetical until the first entry of the day. From then on it
 ranks people by **score** across their tasks,
 highest first, and the first column reads *Rank* instead of *#*. Places are
 **DENSE_RANK**: equal scores share a place and the next follows immediately
-(1, 2, 2, 3 — never 1, 2, 2, 4). The same applies to *Avg rank* in the graph. Tasks with no
-rating or no time recorded score nothing, and equal scores fall back to
+(1, 2, 2, 3 — never 1, 2, 2, 4). The same applies to *Avg rank* in the graph. Tasks missing
+either rating or with no time recorded score nothing, and equal scores fall back to
 alphabetical so the order never jitters. Each person's total shows under their
 name once it is above zero.
 
@@ -82,27 +92,40 @@ whole table from `entries` if it is ever needed.
 
 ## Locking and the passcode
 
-At midnight IST the previous day becomes read-only on the board, for everyone.
+The board can write any day from `editable_from()` through today — currently
+**1 September 2026** onwards, so the team can backfill. Anything earlier is
+read-only on the board, for everyone, and future days are never writable.
 There is no job to run and no unlock button — the RLS policies simply compare
-`log_date` to `today_ist()` and stop matching. Corrections to an earlier day are
-made by an admin at `/rating`.
+`log_date` to `editable_from()` and `today_ist()`. Corrections outside that
+window are made by an admin at `/rating`.
+
+The window lives in one database function, and the board reads it too, so the
+UI moves with it. To go back to today-only:
+
+```sql
+create or replace function public.editable_from() returns date
+language sql stable set search_path = public, pg_temp
+as $$ select public.today_ist() $$;
+```
 
 The browser holds a **public** anon key, so nothing enforced in React would
 count; all of this is enforced by Postgres:
 
 | what                              | how it is stopped                                   |
 | --------------------------------- | --------------------------------------------------- |
-| editing / deleting a past day      | RLS restricts direct writes to today                |
-| back-dating a new entry            | RLS `with check (log_date = today_ist())`           |
-| moving a row into a past day       | same check on the new row                           |
-| writing `rating` by any route      | the column is not in anon's `GRANT UPDATE` list     |
+| editing / deleting a day before the window | RLS restricts direct writes to `editable_from()` .. `today_ist()` |
+| back-dating a new entry past the window | the same check on the inserted row       |
+| logging a future day               | the same check — nothing after `today_ist()`        |
+| moving a task to another day       | `log_date` is not in anon's `GRANT UPDATE` list     |
+| writing `efficiency` or `impact`   | neither column is in anon's `GRANT INSERT` / `GRANT UPDATE` |
 | reading the passcode               | `app_secrets` has no grants and no policies         |
 | calling the internal functions     | `EXECUTE` revoked from `PUBLIC`, not just from anon |
 | brute forcing the passcode         | bcrypt cost 12, plus a 10-failures-in-15-minutes cut-off |
 
-Past days and every rating change go through `SECURITY DEFINER` functions that
-verify a bcrypt passcode inside the database: `admin_update_entry`,
-`admin_delete_entry`, `admin_insert_entry`, `admin_set_day` and `set_rating`.
+Days outside the window and every rating change go through `SECURITY DEFINER`
+functions that verify a bcrypt passcode inside the database:
+`admin_update_entry`, `admin_delete_entry`, `admin_insert_entry`,
+`admin_set_day`, `set_efficiency` and `set_impact`.
 The passcode is stored hashed in `app_secrets`; change it with
 
 ```sql
@@ -120,8 +143,8 @@ passcode is only as private as the people who know it.
 
 | path      | what it is                                                          |
 | --------- | ------------------------------------------------------------------- |
-| `/`       | the board. Today is editable by anyone; **earlier days are view-only, permanently** — there is no unlock here |
-| `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, rating and remarks |
+| `/`       | the board. Any day from 1 September 2026 to today is editable by anyone, and the log dialog has a date field for backfilling; **earlier days are view-only** — there is no unlock here |
+| `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, efficiency, impact and remarks, plus a PDF report |
 
 `vercel.json` already rewrites everything to `index.html`, so `/rating` works
 on a deployed build.
@@ -193,13 +216,14 @@ is pure and exported so the maths can be checked against SQL.
 
 An entry with `created_by = null` was assigned to that person; a non-null
 `created_by` means they logged it themselves. Each task carries one verdict —
-`done` / `not_done` / `rework` — plus `minutes` taken, a 1-5 `rating` and free
-text `remarks`. Changing the verdict writes `status_by` and `status_at`, so the
+`done` / `not_done` / `rework` — plus `minutes` taken, a 1-5 `efficiency`
+(starts at 3), a 1-5 `impact` (starts blank) and free text `remarks`. Changing the verdict writes `status_by` and `status_at`, so the
 acknowledgement trail is kept rather than just the current value.
 
-Row Level Security is on with permissive policies for the `anon` role: this is
-an internal board with no login, which is deliberate. `members` is read-only
-from the client so the roster can only change from the SQL editor.
+Row Level Security is on. This is an internal board with no login, which is
+deliberate: anyone can read everything, and anyone can write inside the open
+window (see *Locking and the passcode*). `members` is read-only from the client
+so the roster can only change from the SQL editor.
 
 ## Changing things
 
@@ -210,6 +234,6 @@ from the client so the roster can only change from the SQL editor.
 
 ## Status
 
-Schema, RLS, grants and realtime are applied to the live project. The roster is
-seeded with the 15 team members. The board starts empty — the first entry
-someone adds is the first row.
+Schema, RLS, grants and realtime are applied to the live project, through
+migration 0014. The roster is seeded with the 15 team members, and the team has
+been logging since 21 August 2026.

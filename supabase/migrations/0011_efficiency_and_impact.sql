@@ -13,7 +13,14 @@
 -- lost. `efficiency` starts null and has to be filled in.
 -- ============================================================
 
-alter table public.entries rename column rating to impact;
+-- guarded so a fresh build works too: schema.sql already has `impact`
+do $$ begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'entries'
+                and column_name = 'rating') then
+    alter table public.entries rename column rating to impact;
+  end if;
+end $$;
 alter table public.entries add column if not exists efficiency smallint;
 
 alter table public.entries drop constraint if exists entries_rating_check;

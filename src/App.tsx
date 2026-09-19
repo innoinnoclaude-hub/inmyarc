@@ -37,7 +37,8 @@ function Portal() {
     new Date().toISOString(),
   );
 
-  // the board never unlocks: past days are read-only for everyone here
+  // no passcode here: the board writes only inside the open window
+  // (editable_from() through today); everything else is view-only
   const d = useDashboard(date, null);
   const viewingToday = date === todayISO();
 
@@ -77,7 +78,7 @@ function Portal() {
   );
 
   const memberCount = d.roster.length;
-  /** Past days are permanently view-only on the board. */
+  /** Days before the open window are view-only on the board. */
   const locked = d.locked;
 
   return (
@@ -219,11 +220,12 @@ function Portal() {
         members={d.roster}
         dayLogs={d.dayLogs}
         date={date}
+        onDateChange={setDate}
         identity={identity}
         onIdentity={saveIdentity}
         initialTab={dialog.tab}
         initialMember={dialog.member}
-        minDate={todayISO()}
+        minDate={d.openFrom ?? todayISO()}
         onSubmitDay={d.submitDay}
         onAssign={d.assignTask}
       />

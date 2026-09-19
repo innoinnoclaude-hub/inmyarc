@@ -285,6 +285,7 @@ function Board() {
         members={d.roster}
         dayLogs={d.dayLogs}
         date={date}
+        onDateChange={setDate}
         identity={adding.member}
         onIdentity={() => {}}
         initialTab={adding.tab}
