@@ -30,10 +30,17 @@ create table if not exists public.app_secrets (
   updated_at timestamptz not null default now()
 );
 
+-- The real passcode is never written in this file — the repository is public.
+-- This seeds a placeholder only when no passcode exists yet (a brand-new
+-- project), and never overwrites one, so re-running this migration can't reset
+-- a live passcode. Set the real value afterwards:
+--   update public.app_secrets
+--      set value = extensions.crypt('<passcode>', extensions.gen_salt('bf', 12))
+--    where key = 'passcode';
 insert into public.app_secrets (key, value)
-values ('passcode', extensions.crypt('***REMOVED***', extensions.gen_salt('bf', 12)))
-on conflict (key) do update
-  set value = excluded.value, updated_at = now();
+values ('passcode', extensions.crypt('change-me-' || gen_random_uuid()::text,
+                                     extensions.gen_salt('bf', 12)))
+on conflict (key) do nothing;
 
 alter table public.app_secrets enable row level security;
 revoke all on public.app_secrets from anon, authenticated, public;

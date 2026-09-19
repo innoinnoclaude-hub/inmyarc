@@ -55,3 +55,8 @@ node_modules/.vite/
 tmp/
 temp/
 ssrcheck/
+
+# the maintainer handbook holds live credentials and the repo is PUBLIC —
+# it must never be committed
+VERSION.md
+*.local.md
