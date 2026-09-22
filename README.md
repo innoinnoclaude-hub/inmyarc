@@ -3,8 +3,7 @@
 A single-page internal portal. Everyone picks their name, marks how the day
 went, and adds one entry per task. Anyone can assign a task to a teammate, and
 anyone can mark a task validated. The board is scoped to one day and rolls over
-at midnight (Asia/Kolkata); any day from 1 September 2026 to today can still be
-filled in. Every task carries a Done / Not done / Rework required verdict, the
+at midnight (Asia/Kolkata), when the previous day locks. Every task carries a Done / Not done / Rework required verdict, the
 time it took and remarks — all editable straight from the table — plus an
 efficiency and an impact rating set by an admin.
 
@@ -25,7 +24,7 @@ No server to run, deploys to Vercel as a static site.
 
    1. `supabase/schema.sql`
    2. `supabase/seed.sql`
-   3. `supabase/migrations/` **0006 through 0014** — skip 0002–0005, which are
+   3. `supabase/migrations/` **0006 through 0015** — skip 0002–0005, which are
       already folded into `schema.sql`
    4. set the admin passcode (see *Locking and the passcode*); 0007 seeds a
       random one nobody knows
@@ -92,21 +91,23 @@ whole table from `entries` if it is ever needed.
 
 ## Locking and the passcode
 
-The board can write any day from `editable_from()` through today — currently
-**1 September 2026** onwards, so the team can backfill. Anything earlier is
-read-only on the board, for everyone, and future days are never writable.
-There is no job to run and no unlock button — the RLS policies simply compare
-`log_date` to `editable_from()` and `today_ist()`. Corrections outside that
-window are made by an admin at `/rating`.
+The board writes **today only**. At midnight IST the previous day becomes
+read-only on the board, for everyone, and future days are never writable. There
+is no job to run and no unlock button — the RLS policies compare `log_date` to
+`editable_from()` and `today_ist()`, and `editable_from()` returns today.
+Corrections to an earlier day are made by an admin at `/rating`.
 
-The window lives in one database function, and the board reads it too, so the
-UI moves with it. To go back to today-only:
+The window lives in that one function, and the board reads it too, so the UI
+moves with it. It was opened from 1 September 2026 for a backfill (0014) and
+closed again on 22 September (0015). To reopen from a date:
 
 ```sql
 create or replace function public.editable_from() returns date
 language sql stable set search_path = public, pg_temp
-as $$ select public.today_ist() $$;
+as $$ select date '2026-09-01' $$;
 ```
+
+and to close it again, make it `select public.today_ist()`.
 
 The browser holds a **public** anon key, so nothing enforced in React would
 count; all of this is enforced by Postgres:
@@ -143,7 +144,7 @@ passcode is only as private as the people who know it.
 
 | path      | what it is                                                          |
 | --------- | ------------------------------------------------------------------- |
-| `/`       | the board. Any day from 1 September 2026 to today is editable by anyone, and the log dialog has a date field for backfilling; **earlier days are view-only** — there is no unlock here |
+| `/`       | the board. Today is editable by anyone; **earlier days are view-only** — there is no unlock here |
 | `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, efficiency, impact and remarks, plus a PDF report |
 
 `vercel.json` already rewrites everything to `index.html`, so `/rating` works
@@ -235,5 +236,5 @@ so the roster can only change from the SQL editor.
 ## Status
 
 Schema, RLS, grants and realtime are applied to the live project, through
-migration 0014. The roster is seeded with the 15 team members, and the team has
+migration 0015. The roster is seeded with the 15 team members, and the team has
 been logging since 21 August 2026.

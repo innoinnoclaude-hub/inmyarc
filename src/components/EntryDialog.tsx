@@ -48,8 +48,9 @@ export function EntryDialog({
   members: Member[];
   dayLogs: DayLog[];
   date: string;
-  /** Moves the page to another day. When given, "My day" gets a date field so
-   *  someone can backfill without paging back one day at a time. */
+  /** Moves the page to another day. When given, and the allowed range spans
+   *  more than one day, "My day" gets a date field so someone can jump to a
+   *  date instead of paging back one day at a time. */
   onDateChange?: (next: string) => void;
   identity: string | null;
   onIdentity: (id: string) => void;
@@ -123,6 +124,13 @@ export function EntryDialog({
    *  field can produce anything. */
   const inRange = (v: string) =>
     /^\d{4}-\d{2}-\d{2}$/.test(v) && v <= maxDate && (!minDate || v >= minDate);
+  // a date field is only worth showing when there is more than one day to pick
+  const showDay = !!onDateChange && (!minDate || minDate < maxDate);
+  const rangeHint = !minDate
+    ? undefined
+    : minDate >= maxDate
+      ? "today only"
+      : `from ${dateShort(minDate)}`;
 
   /**
    * Seed attendance from whatever is already saved for that person — but only
@@ -255,7 +263,7 @@ export function EntryDialog({
           <div
             className={cx(
               "grid gap-4",
-              onDateChange ? "sm:grid-cols-[1fr_150px_1fr]" : "sm:grid-cols-2",
+              showDay ? "sm:grid-cols-[1fr_150px_1fr]" : "sm:grid-cols-2",
             )}
             data-stagger
           >
@@ -274,12 +282,9 @@ export function EntryDialog({
                 ))}
               </Select>
             </div>
-            {onDateChange && (
+            {showDay && onDateChange && (
               <div>
-                <Label
-                  htmlFor="day"
-                  hint={minDate ? `from ${dateShort(minDate)}` : undefined}
-                >
+                <Label htmlFor="day" hint={rangeHint}>
                   Day
                 </Label>
                 <TextInput
@@ -411,10 +416,7 @@ export function EntryDialog({
           </div>
 
           <div data-stagger>
-            <Label
-              htmlFor="on"
-              hint={minDate ? `from ${dateShort(minDate)}` : undefined}
-            >
+            <Label htmlFor="on" hint={rangeHint}>
               For the day
             </Label>
             <TextInput
