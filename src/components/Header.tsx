@@ -69,25 +69,30 @@ export function Header({
   return (
     <header
       ref={root}
-      className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-b border-line pb-4"
+      className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-5"
     >
+      {/* same rule as /rating: one line from `lg` up, never wrapping — the
+          controls hold their size and the quieter parts drop out first */}
       <div
         data-head
-        className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5"
+        className="flex min-w-0 items-center gap-x-3 overflow-hidden lg:flex-1"
       >
-        <span className="text-[11px] leading-none font-semibold tracking-[0.14em] whitespace-nowrap text-ink-3 uppercase">
+        <span className="hidden shrink-0 text-[11px] leading-none font-semibold tracking-[0.14em] whitespace-nowrap text-ink-3 uppercase xl:inline">
           <span className="text-ink">{APP.org}</span>
           <span className="mx-2 text-line-strong">/</span>
           {APP.title}
         </span>
 
-        <span className="hidden h-5 w-px bg-line-strong sm:block" />
+        <span className="hidden h-5 w-px shrink-0 bg-line-strong xl:block" />
 
-        <div ref={day} className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <h1 className="text-[26px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap text-ink sm:text-[30px]">
+        <div
+          ref={day}
+          className="flex min-w-0 items-center gap-x-2.5 overflow-hidden"
+        >
+          <h1 className="shrink-0 text-[22px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap text-ink sm:text-[26px] xl:text-[30px]">
             {weekdayLong(date)}
           </h1>
-          <p className="tnum text-[14px] leading-none font-medium whitespace-nowrap text-ink-2">
+          <p className="tnum hidden shrink-0 text-[14px] leading-none font-medium whitespace-nowrap text-ink-2 sm:block">
             {dateLong(date)}
           </p>
           {isToday ? (
@@ -99,13 +104,24 @@ export function Header({
           ) : (
             <Chip tone="live">Open for backfill</Chip>
           )}
-          {isWeekend(date) && <Chip tone="mute">Weekend</Chip>}
-          {locked && <Chip tone="mute">View only</Chip>}
+          {isWeekend(date) && (
+            <span className="hidden shrink-0 xl:inline-flex">
+              <Chip tone="mute">Weekend</Chip>
+            </span>
+          )}
+          {locked && (
+            <span className="shrink-0">
+              <Chip tone="mute">View only</Chip>
+            </span>
+          )}
         </div>
       </div>
 
-      <div data-head className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center rounded-sm border border-line-strong bg-surface">
+      <div
+        data-head
+        className="-mx-1 flex shrink-0 items-center gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:gap-2 lg:overflow-x-visible lg:px-0 lg:pb-0"
+      >
+        <div className="flex shrink-0 items-center rounded-sm border border-line-strong bg-surface">
           <button
             type="button"
             aria-label="Previous day"
@@ -114,7 +130,7 @@ export function Header({
           >
             <ChevronLeft className="size-4" />
           </button>
-          <span className="tnum h-9 min-w-[84px] border-x border-line px-3 text-center text-[12.5px] leading-9 font-medium text-ink">
+          <span className="tnum h-9 min-w-[76px] shrink-0 border-x border-line px-3 text-center text-[12.5px] leading-9 font-medium text-ink">
             {isToday ? "Today" : dateShort(date)}
           </span>
           <button
@@ -134,7 +150,7 @@ export function Header({
         </div>
 
         {!isToday && (
-          <Button size="md" onClick={() => onDateChange(today)}>
+          <Button size="md" className="shrink-0" onClick={() => onDateChange(today)}>
             Today
           </Button>
         )}
@@ -143,18 +159,18 @@ export function Header({
           size="md"
           onClick={onRefresh}
           aria-label="Refresh"
-          className="w-9 px-0"
+          className="w-9 shrink-0 px-0"
         >
           <Refresh className={cx("size-4", busy && "animate-spin")} />
         </Button>
 
-        <Button size="md" onClick={onGraph}>
+        <Button size="md" className="shrink-0" onClick={onGraph}>
           <ChartIcon className="size-3.5" />
           Graph
         </Button>
 
         {!locked && (
-          <Button variant="primary" size="md" onClick={onAdd}>
+          <Button variant="primary" size="md" className="shrink-0" onClick={onAdd}>
             <Plus className="size-3.5" />
             {identity ? "Add entry" : "Add your entry"}
           </Button>

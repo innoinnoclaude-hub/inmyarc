@@ -159,36 +159,50 @@ function Board() {
 
   return (
     <div className="flex min-h-screen w-full flex-col gap-6 px-5 pt-8 pb-16 sm:px-8 sm:pt-10">
-      <header className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-b border-line pb-4">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span className="text-[11px] leading-none font-semibold tracking-[0.14em] whitespace-nowrap text-ink-3 uppercase">
+      {/*
+        One line from `lg` up, and it cannot wrap: the controls never shrink,
+        the day block takes what is left and clips rather than pushing them to a
+        second row. The parts that matter least drop out first as the window
+        narrows — the wordmark, then the long date, then the quieter chips — so
+        the header stays whole instead of breaking. Below `lg` there is no room
+        for one line, so the controls sit on their own row and scroll sideways.
+      */}
+      <header className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-5">
+        <div className="flex min-w-0 items-center gap-x-3 overflow-hidden lg:flex-1">
+          <span className="hidden shrink-0 text-[11px] leading-none font-semibold tracking-[0.14em] whitespace-nowrap text-ink-3 uppercase 2xl:inline">
             <span className="text-ink">{APP.org}</span>
             <span className="mx-2 text-line-strong">/</span>
             Ratings
           </span>
-          <span className="hidden h-5 w-px bg-line-strong sm:block" />
-          <h1 className="text-[26px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap text-ink sm:text-[30px]">
+          <span className="hidden h-5 w-px shrink-0 bg-line-strong 2xl:block" />
+          <h1 className="shrink-0 text-[22px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap text-ink sm:text-[26px] xl:text-[30px]">
             {weekdayLong(date)}
           </h1>
-          <p className="tnum text-[14px] leading-none font-medium whitespace-nowrap text-ink-2">
+          <p className="tnum hidden shrink-0 text-[14px] leading-none font-medium whitespace-nowrap text-ink-2 xl:block">
             {dateLong(date)}
           </p>
-          <Chip tone={counts.total && counts.rated === counts.total ? "ok" : "wait"}>
-            {counts.rated} / {counts.total} scored
-          </Chip>
-          {date !== today && <Chip tone="mute">Archive</Chip>}
+          <span className="shrink-0">
+            <Chip tone={counts.total && counts.rated === counts.total ? "ok" : "wait"}>
+              {counts.rated} / {counts.total} scored
+            </Chip>
+          </span>
+          {date !== today && (
+            <span className="hidden shrink-0 lg:inline-flex">
+              <Chip tone="mute">Archive</Chip>
+            </span>
+          )}
           {order && (
             <span
               title="Rows keep the places they had when this day loaded, so rating a task never reshuffles the table. Refresh to re-rank."
-              className="inline-flex"
+              className="hidden shrink-0 2xl:inline-flex"
             >
               <Chip tone="mute">Order held</Chip>
             </span>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-sm border border-line-strong bg-surface">
+        <div className="-mx-1 flex shrink-0 items-center gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:gap-2 lg:overflow-x-visible lg:px-0 lg:pb-0">
+          <div className="flex shrink-0 items-center rounded-sm border border-line-strong bg-surface">
             <button
               type="button"
               aria-label="Previous day"
@@ -197,7 +211,7 @@ function Board() {
             >
               <ChevronLeft className="size-4" />
             </button>
-            <span className="tnum h-9 min-w-[84px] border-x border-line px-3 text-center text-[12.5px] leading-9 font-medium text-ink">
+            <span className="tnum h-9 min-w-[76px] shrink-0 border-x border-line px-3 text-center text-[12.5px] leading-9 font-medium text-ink">
               {date === today ? "Today" : dateShort(date)}
             </span>
             <button
@@ -216,7 +230,9 @@ function Board() {
             </button>
           </div>
           {date !== today && (
-            <Button onClick={() => setDate(today)}>Today</Button>
+            <Button className="shrink-0" onClick={() => setDate(today)}>
+              Today
+            </Button>
           )}
           <Button
             onClick={() =>
@@ -224,7 +240,7 @@ function Board() {
             }
             aria-label="Refresh"
             title="Refresh and re-rank the table"
-            className="w-9 px-0"
+            className="w-9 shrink-0 px-0"
           >
             <Refresh className={cx("size-4", (d.busy || d.loading) && "animate-spin")} />
           </Button>
@@ -244,19 +260,25 @@ function Board() {
               }
             }}
             disabled={downloading || d.loading}
+            className="shrink-0"
           >
             <Download className="size-3.5" />
             {downloading ? "Building…" : "Report"}
           </Button>
-          <Button onClick={lock}>Sign out</Button>
+          <Button className="shrink-0" onClick={lock}>
+            Sign out
+          </Button>
           <Button
             variant="primary"
+            className="shrink-0"
             onClick={() => setAdding({ open: true, tab: "day", member: null })}
           >
             <Plus className="size-3.5" />
             Add task
           </Button>
-          <Button onClick={() => (window.location.href = "/")}>Board</Button>
+          <Button className="shrink-0" onClick={() => (window.location.href = "/")}>
+            Board
+          </Button>
         </div>
       </header>
 
