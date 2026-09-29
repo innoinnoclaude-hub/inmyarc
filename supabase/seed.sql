@@ -7,14 +7,17 @@
 
 insert into public.members (name, title) values
   ('Akarshan', null),
+  ('Akshay',   null),
   ('Amogh',    null),
   ('Anshuman', null),
   ('Aryaman',  null),
   ('Ashish',   null),
+  ('Ayush',    null),
   ('Deeksha',  null),
   ('Harsh',    null),
   ('Hitesh',   null),
   ('Japneet',  null),
+  ('Kunal',    null),
   ('Lakshay',  null),
   ('Mahi',     null),
   ('Pooja',    null),

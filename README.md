@@ -256,5 +256,5 @@ so the roster can only change from the SQL editor.
 ## Status
 
 Schema, RLS, grants and realtime are applied to the live project, through
-migration 0016. The roster is seeded with the 16 team members, and the team has
+migration 0016. The roster is seeded with the 19 team members, and the team has
 been logging since 21 August 2026.
