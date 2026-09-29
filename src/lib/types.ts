@@ -31,6 +31,12 @@ export interface Entry {
   /** 1-5 stars: how much it mattered. */
   impact: number | null;
   remarks: string | null;
+  /** One optional file in the `task-files` bucket. Path is null when there is
+   *  none; the four move together. */
+  attachment_path: string | null;
+  attachment_name: string | null;
+  attachment_type: string | null;
+  attachment_size: number | null;
   status_by: string | null;
   status_at: string | null;
   created_at: string;

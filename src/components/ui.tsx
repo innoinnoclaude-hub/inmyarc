@@ -264,6 +264,19 @@ export function Close({ className }: IconProps) {
   );
 }
 
+export function Clip({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
+      <path
+        d="M10.5 6.5l-4 4a1.75 1.75 0 0 0 2.5 2.5l4.5-4.5a3 3 0 0 0-4.25-4.25L4.5 9.25a4.25 4.25 0 0 0 6 6L13 12.75"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="square"
+      />
+    </svg>
+  );
+}
+
 export function Trash({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>

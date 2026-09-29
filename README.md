@@ -4,8 +4,8 @@ A single-page internal portal. Everyone picks their name, marks how the day
 went, and adds one entry per task. Anyone can assign a task to a teammate, and
 anyone can mark a task validated. The board is scoped to one day and rolls over
 at midnight (Asia/Kolkata), when the previous day locks. Every task carries a Done / Not done / Rework required verdict, the
-time it took and remarks — all editable straight from the table — plus an
-efficiency and an impact rating set by an admin.
+time it took, remarks and one optional attachment — all editable straight from
+the table — plus an efficiency and an impact rating set by an admin.
 
 Frontend only — React + Tailwind v4 + GSAP, talking straight to Supabase.
 No server to run, deploys to Vercel as a static site.
@@ -24,7 +24,7 @@ No server to run, deploys to Vercel as a static site.
 
    1. `supabase/schema.sql`
    2. `supabase/seed.sql`
-   3. `supabase/migrations/` **0006 through 0015** — skip 0002–0005, which are
+   3. `supabase/migrations/` **0006 through 0016** — skip 0002–0005, which are
       already folded into `schema.sql`
    4. set the admin passcode (see *Locking and the passcode*); 0007 seeds a
       random one nobody knows
@@ -88,6 +88,26 @@ or moving a task to another person or day recomputes the affected days. The
 browser has SELECT on it and nothing else, so it cannot drift out of step with
 the tasks it summarises. `select public.rebuild_daily_scores();` rebuilds the
 whole table from `entries` if it is ever needed.
+
+## Attachments
+
+Each task can carry **one file, up to 10 MB** — a PDF, an image, anything.
+Whoever logs the task attaches it in the same dialog; it can be replaced or
+removed later from *Edit entry*. Everyone on the board sees the file name under
+the task and can open it, including on a day that is otherwise view-only, and
+an admin can attach to any day from `/rating`.
+
+The file goes to the private Supabase Storage bucket `task-files`; the task row
+keeps the path, the original name, the MIME type and the size. There is no
+server of our own, so Storage is the only place a file can live where the whole
+team can read it. Reading goes through a **signed link valid for two minutes**,
+so a URL that leaks stops working — `select` and `insert` are the only things
+the browser may do to the bucket.
+
+Two consequences worth knowing: a file that has been uploaded cannot be
+overwritten or deleted from the browser, so removing an attachment (or deleting
+the task) drops the link and leaves the file in the bucket; and the PDF day
+report does not list attachments.
 
 ## Locking and the passcode
 
@@ -212,7 +232,7 @@ is pure and exported so the maths can be checked against SQL.
 | ---------- | ----------------------------------------------------------------- |
 | `members`  | the roster behind every dropdown; `active = false` retires someone |
 | `day_logs` | one row per member per day — attendance + an optional note         |
-| `entries`  | every task: whose it is, verdict, time, efficiency, impact, remarks |
+| `entries`  | every task: whose it is, verdict, time, efficiency, impact, remarks, attachment |
 | `daily_scores` | trigger-maintained per-person, per-day rollup behind the graph |
 
 An entry with `created_by = null` was assigned to that person; a non-null
@@ -236,5 +256,5 @@ so the roster can only change from the SQL editor.
 ## Status
 
 Schema, RLS, grants and realtime are applied to the live project, through
-migration 0015. The roster is seeded with the 16 team members, and the team has
+migration 0016. The roster is seeded with the 16 team members, and the team has
 been logging since 21 August 2026.

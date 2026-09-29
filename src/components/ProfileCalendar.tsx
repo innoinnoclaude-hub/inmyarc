@@ -11,7 +11,8 @@ import {
 } from "../lib/date";
 import { monthGrid, type ScoreRow } from "../lib/profile";
 import type { Entry } from "../lib/types";
-import { Chip, ChevronLeft, ChevronRight, cx } from "./ui";
+import { formatBytes, openAttachment } from "../lib/attachments";
+import { Chip, ChevronLeft, ChevronRight, Clip, cx } from "./ui";
 
 const FILL = [
   "bg-cal-0",
@@ -295,6 +296,19 @@ export function ProfileCalendar({
                       <span className="tnum text-[11px] text-ink-4">
                         logged {clock(e.created_at)}
                       </span>
+                      {e.attachment_path && (
+                        <button
+                          type="button"
+                          title={`Open ${e.attachment_name} (${formatBytes(e.attachment_size)})`}
+                          onClick={() => void openAttachment(e.attachment_path!)}
+                          className="focus-ring inline-flex max-w-[200px] items-center gap-1 rounded-xs text-[11px] font-medium text-ink-3 transition hover:text-ink"
+                        >
+                          <Clip className="size-3 shrink-0" />
+                          <span className="truncate underline decoration-line-strong underline-offset-2">
+                            {e.attachment_name}
+                          </span>
+                        </button>
+                      )}
                     </div>
 
                     {e.remarks && (

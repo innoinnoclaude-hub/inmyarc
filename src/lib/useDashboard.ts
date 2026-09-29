@@ -3,6 +3,11 @@ import { supabase, isConfigured } from "./supabase";
 import { todayISO } from "./date";
 import type { DayLog, Entry, Member, RowGroup } from "./types";
 import { scoreFor, type AttendanceKey, type StatusKey } from "../config";
+import {
+  NO_ATTACHMENT,
+  uploadAttachment,
+  type AttachmentPatch,
+} from "./attachments";
 
 export interface DraftEntry {
   title: string;
@@ -10,6 +15,8 @@ export interface DraftEntry {
   status: StatusKey;
   hours: string;
   mins: string;
+  /** One optional file, uploaded before the task row is written. */
+  file: File | null;
 }
 
 /** "2" + "30" -> 150. Blank on both sides means "not recorded". */
@@ -211,7 +218,7 @@ export function useDashboard(date: string, passcode: string | null) {
           supabase
             .from("entries")
             .select(
-              "id,log_date,member_id,created_by,title,details,status,minutes,efficiency,impact,remarks,status_by,status_at,created_at,updated_at",
+              "id,log_date,member_id,created_by,title,details,status,minutes,efficiency,impact,remarks,attachment_path,attachment_name,attachment_type,attachment_size,status_by,status_at,created_at,updated_at",
             )
             .eq("log_date", target)
             .order("created_at", { ascending: true }),
@@ -330,6 +337,13 @@ export function useDashboard(date: string, passcode: string | null) {
     }) =>
       run(async () => {
         const target = dateRef.current;
+        const drafts = input.entries.filter((e) => e.title.trim().length > 0);
+        // Files go up before any row is written, so a failed upload leaves
+        // nothing behind and nobody gets a task pointing at a missing file.
+        const files = await Promise.all(
+          drafts.map((e) => (e.file ? uploadAttachment(e.file) : null)),
+        );
+
         if (lockedRef.current) {
           const pass = needPass();
           const { error: dayError } = await supabase.rpc("admin_set_day", {
@@ -340,9 +354,8 @@ export function useDashboard(date: string, passcode: string | null) {
             p_note: input.note.trim() || null,
           });
           if (dayError) throw dayError;
-          const rows = input.entries.filter((e) => e.title.trim().length > 0);
-          for (const e of rows) {
-            const { error } = await supabase.rpc("admin_insert_entry", {
+          for (const [i, e] of drafts.entries()) {
+            const { data: id, error } = await supabase.rpc("admin_insert_entry", {
               p_pass: pass,
               p_log_date: target,
               p_member: input.memberId,
@@ -353,8 +366,17 @@ export function useDashboard(date: string, passcode: string | null) {
               p_minutes: draftMinutes(e),
             });
             if (error) throw error;
+            // the insert function takes no attachment, so set it straight after
+            if (files[i] && id) {
+              const { error: attachError } = await supabase.rpc("admin_update_entry", {
+                p_pass: pass,
+                p_id: id,
+                p_patch: files[i],
+              });
+              if (attachError) throw attachError;
+            }
           }
-          return rows.length;
+          return drafts.length;
         }
 
         affected(
@@ -374,17 +396,16 @@ export function useDashboard(date: string, passcode: string | null) {
 
         // every row must carry an identical set of keys — PostgREST rejects a
         // bulk insert whose objects have uneven keys
-        const rows = input.entries
-          .filter((e) => e.title.trim().length > 0)
-          .map((e) => ({
-            log_date: target,
-            member_id: input.memberId,
-            created_by: input.memberId,
-            title: e.title.trim(),
-            details: e.details.trim() || null,
-            status: e.status,
-            minutes: draftMinutes(e),
-          }));
+        const rows = drafts.map((e, i) => ({
+          log_date: target,
+          member_id: input.memberId,
+          created_by: input.memberId,
+          title: e.title.trim(),
+          details: e.details.trim() || null,
+          status: e.status,
+          minutes: draftMinutes(e),
+          ...(files[i] ?? NO_ATTACHMENT),
+        }));
         if (rows.length) {
           affected(await supabase.from("entries").insert(rows).select("id"));
         }
@@ -478,13 +499,16 @@ export function useDashboard(date: string, passcode: string | null) {
       status: StatusKey;
       minutes: number | null;
       assigned: boolean;
+      file?: File | null;
     }) =>
       run(async () => {
         const target = dateRef.current;
         const createdBy = input.assigned ? null : input.memberId;
+        const attachment = input.file ? await uploadAttachment(input.file) : null;
         if (lockedRef.current) {
-          const { error } = await supabase.rpc("admin_insert_entry", {
-            p_pass: needPass(),
+          const pass = needPass();
+          const { data: id, error } = await supabase.rpc("admin_insert_entry", {
+            p_pass: pass,
             p_log_date: target,
             p_member: input.memberId,
             p_created_by: createdBy,
@@ -494,6 +518,14 @@ export function useDashboard(date: string, passcode: string | null) {
             p_minutes: input.minutes,
           });
           if (error) throw error;
+          if (attachment && id) {
+            const { error: attachError } = await supabase.rpc("admin_update_entry", {
+              p_pass: pass,
+              p_id: id,
+              p_patch: attachment,
+            });
+            if (attachError) throw attachError;
+          }
           return;
         }
         affected(
@@ -507,6 +539,7 @@ export function useDashboard(date: string, passcode: string | null) {
               details: input.details.trim() || null,
               status: input.status,
               minutes: input.minutes,
+              ...(attachment ?? NO_ATTACHMENT),
             })
             .select("id"),
         );
@@ -526,9 +559,18 @@ export function useDashboard(date: string, passcode: string | null) {
         remarks: string;
         statusChanged: boolean;
         actorId: string | null;
+        /** A new file to upload, `clear` to drop the current one, or nothing
+         *  to leave the attachment alone. */
+        attachment?: File | "clear" | null;
       },
     ) =>
       run(async () => {
+        const attachment: AttachmentPatch | null =
+          patch.attachment instanceof File
+            ? await uploadAttachment(patch.attachment)
+            : patch.attachment === "clear"
+              ? NO_ATTACHMENT
+              : null;
         // `rating` is deliberately absent: it is only settable at /rating
         const fields = {
             title: patch.title.trim(),
@@ -536,6 +578,7 @@ export function useDashboard(date: string, passcode: string | null) {
             status: patch.status,
             minutes: patch.minutes,
             remarks: patch.remarks.trim().slice(0, 500) || null,
+            ...(attachment ?? {}),
             ...(patch.statusChanged
               ? {
                   status_by: patch.actorId,

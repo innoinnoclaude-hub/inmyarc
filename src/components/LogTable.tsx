@@ -10,10 +10,13 @@ import {
   type StatusKey,
 } from "../config";
 import { clock } from "../lib/date";
+import { formatBytes, openAttachment } from "../lib/attachments";
 import { RemarkEditor } from "./RemarkEditor";
+import { useToast } from "./Toaster";
 import type { Entry, Member, RowGroup } from "../lib/types";
 import {
   Chip,
+  Clip,
   CrossCircle,
   Pencil,
   Plus,
@@ -80,6 +83,7 @@ export function LogTable({
   onMember,
 }: Props) {
   const frozen = !canEditTasks;
+  const toast = useToast();
   const root = useRef<HTMLDivElement>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const signature = groups
@@ -292,6 +296,33 @@ export function LogTable({
                                 <span className="font-medium text-ink-3">
                                   assigned
                                 </span>
+                              </>
+                            )}
+                            {entry.attachment_path && (
+                              <>
+                                <span className="text-line-strong">/</span>
+                                <button
+                                  type="button"
+                                  title={`Open ${entry.attachment_name} (${formatBytes(entry.attachment_size)})`}
+                                  onClick={() =>
+                                    void openAttachment(
+                                      entry.attachment_path!,
+                                    ).catch((e) =>
+                                      toast(
+                                        e instanceof Error
+                                          ? e.message
+                                          : "Could not open the attachment.",
+                                        "error",
+                                      ),
+                                    )
+                                  }
+                                  className="focus-ring inline-flex max-w-[220px] items-center gap-1 rounded-xs font-medium text-ink-3 transition hover:text-ink"
+                                >
+                                  <Clip className="size-3 shrink-0" />
+                                  <span className="truncate underline decoration-line-strong underline-offset-2">
+                                    {entry.attachment_name}
+                                  </span>
+                                </button>
                               </>
                             )}
                           </p>

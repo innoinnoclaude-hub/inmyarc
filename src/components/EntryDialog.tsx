@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ATTENDANCE, STATUS, type AttendanceKey, type StatusKey } from "../config";
 import { dateLong, dateShort, todayISO } from "../lib/date";
+import { attachmentProblem, formatBytes } from "../lib/attachments";
 import type { DraftEntry } from "../lib/useDashboard";
 import type { DayLog, Member } from "../lib/types";
 import { Dialog } from "./Dialog";
 import { useToast } from "./Toaster";
 import {
   Button,
+  Clip,
   Close,
   Duration,
   Label,
@@ -26,7 +28,72 @@ const blank = (): DraftEntry => ({
   status: "done",
   hours: "",
   mins: "",
+  file: null,
 });
+
+/**
+ * One optional file per task. It is not uploaded here — the draft carries the
+ * File and the save path uploads it before writing the row, so cancelling the
+ * dialog leaves nothing in the bucket.
+ */
+function AttachPicker({
+  file,
+  onPick,
+  onProblem,
+}: {
+  file: File | null;
+  onPick: (file: File | null) => void;
+  onProblem: (message: string | null) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <input
+        ref={input}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const picked = e.target.files?.[0] ?? null;
+          e.target.value = ""; // so picking the same file twice still fires
+          if (!picked) return;
+          const problem = attachmentProblem(picked);
+          onProblem(problem);
+          if (!problem) onPick(picked);
+        }}
+      />
+      {file ? (
+        <>
+          <span
+            title={file.name}
+            className="inline-flex min-w-0 items-center gap-1 rounded-xs bg-mute-bg px-1.5 py-1 text-[11px] font-medium text-ink-2"
+          >
+            <Clip className="size-3 shrink-0" />
+            <span className="max-w-[160px] truncate">{file.name}</span>
+            <span className="tnum shrink-0 text-ink-4">
+              {formatBytes(file.size)}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Remove attachment"
+            onClick={() => {
+              onProblem(null);
+              onPick(null);
+            }}
+            className="focus-ring shrink-0 rounded-xs p-1 text-ink-4 transition hover:bg-off-bg hover:text-off"
+          >
+            <Close className="size-3" />
+          </button>
+        </>
+      ) : (
+        <Button size="sm" onClick={() => input.current?.click()}>
+          <Clip className="size-3" />
+          Attach file
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export function EntryDialog({
   open,
@@ -324,7 +391,13 @@ export function EntryDialog({
           </div>
 
           <div data-stagger>
-            <Label hint={noWork ? "optional on an off day" : "one per task"}>
+            <Label
+              hint={
+                noWork
+                  ? "optional on an off day"
+                  : "one per task · a file each, up to 10 MB"
+              }
+            >
               What you worked on
             </Label>
             <div className="flex flex-col gap-2">
@@ -381,6 +454,11 @@ export function EntryDialog({
                           key: st.key,
                           label: st.label,
                         }))}
+                      />
+                      <AttachPicker
+                        file={d.file}
+                        onPick={(f) => patch(i, { file: f })}
+                        onProblem={setError}
                       />
                     </div>
                   </div>

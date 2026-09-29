@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { STATUS, formatDuration, type StatusKey } from "../config";
 import { clock } from "../lib/date";
+import {
+  attachmentProblem,
+  formatBytes,
+  openAttachment,
+} from "../lib/attachments";
 import type { Entry, Member } from "../lib/types";
 import { Dialog } from "./Dialog";
 import { useToast } from "./Toaster";
 import {
   Button,
+  Clip,
+  Close,
   Duration,
   Label,
   Rating,
@@ -60,6 +67,7 @@ export function EditEntryDialog({
       remarks: string;
       statusChanged: boolean;
       actorId: string | null;
+      attachment?: File | "clear" | null;
     },
   ) => Promise<unknown>;
   onDelete: (entryId: string) => Promise<unknown>;
@@ -72,6 +80,9 @@ export function EditEntryDialog({
   const [hours, setHours] = useState(seed.hours);
   const [mins, setMins] = useState(seed.mins);
   const [remarks, setRemarks] = useState(entry.remarks ?? "");
+  /** A File replaces whatever is there, "clear" drops it, null leaves it. */
+  const [attachment, setAttachment] = useState<File | "clear" | null>(null);
+  const file = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +103,7 @@ export function EditEntryDialog({
         remarks,
         statusChanged,
         actorId: identity,
+        attachment,
       });
       toast("Entry updated.");
       onClose();
@@ -228,6 +240,90 @@ export function EditEntryDialog({
             onChange={setStatus}
             options={STATUS.map((s) => ({ key: s.key, label: s.label }))}
           />
+        </div>
+
+        <div data-stagger>
+          <Label hint="one file, up to 10 MB">Attachment</Label>
+          <input
+            ref={file}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const picked = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              if (!picked) return;
+              const problem = attachmentProblem(picked);
+              setError(problem);
+              if (!problem) setAttachment(picked);
+            }}
+          />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {attachment instanceof File ? (
+              <span
+                title={attachment.name}
+                className="inline-flex min-w-0 items-center gap-1 rounded-xs bg-mute-bg px-1.5 py-1 text-[11.5px] font-medium text-ink-2"
+              >
+                <Clip className="size-3 shrink-0" />
+                <span className="max-w-[220px] truncate">{attachment.name}</span>
+                <span className="tnum shrink-0 text-ink-4">
+                  {formatBytes(attachment.size)}
+                </span>
+                <span className="shrink-0 text-ink-4">— saves on Save</span>
+              </span>
+            ) : entry.attachment_path && attachment !== "clear" ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void openAttachment(entry.attachment_path!).catch((e) =>
+                    setError(e instanceof Error ? e.message : "Could not open it."),
+                  )
+                }
+                title={`Open ${entry.attachment_name}`}
+                className="focus-ring inline-flex min-w-0 items-center gap-1 rounded-xs bg-mute-bg px-1.5 py-1 text-[11.5px] font-medium text-ink-2 transition hover:text-ink"
+              >
+                <Clip className="size-3 shrink-0" />
+                <span className="max-w-[220px] truncate underline decoration-line-strong underline-offset-2">
+                  {entry.attachment_name}
+                </span>
+                <span className="tnum shrink-0 text-ink-4">
+                  {formatBytes(entry.attachment_size)}
+                </span>
+              </button>
+            ) : (
+              <span className="text-[11.5px] text-ink-4">
+                {attachment === "clear" ? "Will be removed on Save." : "None."}
+              </span>
+            )}
+
+            <Button size="sm" onClick={() => file.current?.click()}>
+              <Clip className="size-3" />
+              {entry.attachment_path || attachment instanceof File
+                ? "Replace"
+                : "Attach file"}
+            </Button>
+            {(attachment !== null || entry.attachment_path) &&
+              attachment !== "clear" && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setError(null);
+                    setAttachment(entry.attachment_path ? "clear" : null);
+                  }}
+                >
+                  <Close className="size-3" />
+                  Remove
+                </Button>
+              )}
+            {attachment === "clear" && (
+              <Button size="sm" onClick={() => setAttachment(null)}>
+                Keep it
+              </Button>
+            )}
+          </div>
+          <p className="mt-1.5 text-[11px] leading-[1.5] text-ink-4">
+            A file that has been uploaded stays in storage even after it is
+            removed here; only the link to it is dropped.
+          </p>
         </div>
 
         <div data-stagger>
