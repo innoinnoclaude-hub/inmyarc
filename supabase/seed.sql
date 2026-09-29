@@ -19,6 +19,7 @@ insert into public.members (name, title) values
   ('Mahi',     null),
   ('Pooja',    null),
   ('Rahul',    null),
+  ('Shreyansh',null),
   ('Veni',     null),
   ('Yash',     null)
 on conflict (name) do update
