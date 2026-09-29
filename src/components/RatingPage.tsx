@@ -4,6 +4,7 @@ import { APP } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
+import { applyOrder, snapshotOrder, type RowOrder } from "../lib/rowOrder";
 import { downloadDayReport } from "../lib/report";
 import type { Entry, Member } from "../lib/types";
 import { useToast } from "./Toaster";
@@ -118,6 +119,24 @@ function Board() {
   const d = useDashboard(date, passcode);
   const today = todayISO();
 
+  /**
+   * The row order is held still while rating: see lib/rowOrder.ts. It is taken
+   * again on a day change and when Refresh is pressed, never on a rating.
+   */
+  const [order, setOrder] = useState<RowOrder | null>(null);
+  useEffect(() => {
+    setOrder(null);
+  }, [date]);
+  useEffect(() => {
+    if (order || d.loading || d.groups.length === 0) return;
+    setOrder(snapshotOrder(d.groups, date));
+  }, [order, d.loading, d.groups, date]);
+  const rows = useMemo(() => applyOrder(d.groups, order, date), [
+    d.groups,
+    order,
+    date,
+  ]);
+
   const counts = useMemo(() => {
     let total = 0;
     let rated = 0;
@@ -158,6 +177,14 @@ function Board() {
             {counts.rated} / {counts.total} scored
           </Chip>
           {date !== today && <Chip tone="mute">Archive</Chip>}
+          {order && (
+            <span
+              title="Rows keep the places they had when this day loaded, so rating a task never reshuffles the table. Refresh to re-rank."
+              className="inline-flex"
+            >
+              <Chip tone="mute">Order held</Chip>
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -192,8 +219,11 @@ function Board() {
             <Button onClick={() => setDate(today)}>Today</Button>
           )}
           <Button
-            onClick={() => void d.reload({ quiet: true })}
+            onClick={() =>
+              void d.reload({ quiet: true }).then(() => setOrder(null))
+            }
             aria-label="Refresh"
+            title="Refresh and re-rank the table"
             className="w-9 px-0"
           >
             <Refresh className={cx("size-4", (d.busy || d.loading) && "animate-spin")} />
@@ -239,7 +269,7 @@ function Board() {
       <Summary groups={d.groups} />
 
       <LogTable
-        groups={d.groups}
+        groups={rows}
         memberById={d.memberById}
         identity={null}
         canEditTasks

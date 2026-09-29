@@ -64,6 +64,23 @@ either rating or with no time recorded score nothing, and equal scores fall back
 alphabetical so the order never jitters. Each person's total shows under their
 name once it is above zero.
 
+## Holding the order on `/rating`
+
+The board's ranking is live: the day unfolds and people move. On the admin page
+that fights the work — setting one impact star changes that person's score, the
+table re-sorts, and the row being rated jumps somewhere else mid-click.
+
+So `/rating` **takes the row order and the places once per day it looks at** and
+keeps them: on load, on a day change, and when **Refresh** is pressed. Nothing
+else re-ranks it, not a rating and not a realtime update from someone else. Every
+value in the table — points, ratings, status, remarks — stays live throughout; it
+is only the order and the place numbers that are held, and the header shows
+*Order held* while they are. The board (`/`) is unchanged.
+
+Someone who joins the roster mid-day, or whose first task lands after the
+snapshot, keeps their live place and sorts to the bottom until the next re-rank.
+The logic is `src/lib/rowOrder.ts`.
+
 ## Performance graph
 
 The **Graph** button opens a dialog with a person dropdown (or the whole team),
@@ -165,7 +182,7 @@ passcode is only as private as the people who know it.
 | path      | what it is                                                          |
 | --------- | ------------------------------------------------------------------- |
 | `/`       | the board. Today is editable by anyone; **earlier days are view-only** — there is no unlock here |
-| `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, efficiency, impact and remarks, plus a PDF report |
+| `/rating` | admin. The same board view, passcode-gated, with full control for any day: add, edit, delete, status, attendance, efficiency, impact and remarks, plus a PDF report. The row order is held still while rating — see above |
 
 `vercel.json` already rewrites everything to `index.html`, so `/rating` works
 on a deployed build.
