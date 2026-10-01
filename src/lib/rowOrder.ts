@@ -4,9 +4,9 @@ import type { RowGroup } from "./types";
  * A snapshot of the table's order, so the admin page can hold it still.
  *
  * On the board a live DENSE_RANK is what you want: the day unfolds and people
- * move. On `/rating` it fights the work — setting one impact star changes that
- * person's score, the table re-sorts, and the row being rated jumps somewhere
- * else mid-click. So the admin page takes the order once per day it looks at
+ * move. On `/rating` it fights the work — judging one person changes where they
+ * sit, the table re-sorts, and the row being worked on jumps somewhere else
+ * mid-click. So the admin page takes the order once per day it looks at
  * (on load, on a day change, or when Refresh is pressed) and keeps it until one
  * of those happens again, while every value in the table stays live.
  */
@@ -15,8 +15,9 @@ export interface RowOrder {
   date: string;
   /** Member ids, top row first. */
   ids: string[];
-  /** The place each member held when the snapshot was taken. */
-  ranks: Record<string, number>;
+  /** The place each member held when the snapshot was taken; null while a day
+   *  is still unjudged. */
+  ranks: Record<string, number | null>;
 }
 
 export function snapshotOrder(groups: RowGroup[], date: string): RowOrder {
@@ -49,8 +50,8 @@ export function applyOrder(
         (place.get(b.member.id) ?? Number.MAX_SAFE_INTEGER),
     )
     .map((g) =>
-      order.ranks[g.member.id] === undefined
-        ? g
-        : { ...g, rank: order.ranks[g.member.id] },
+      g.member.id in order.ranks
+        ? { ...g, rank: order.ranks[g.member.id] }
+        : g,
     );
 }

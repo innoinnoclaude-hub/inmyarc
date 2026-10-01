@@ -1,326 +1,126 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import {
-  ATTENDANCE_BY_KEY,
+  BROWNIES,
+  CATEGORIES,
+  CATEGORY_BY_KEY,
   STATUS_BY_KEY,
   formatDuration,
-  type StatusKey,
 } from "../config";
-import { clock, dateShort, startOfMonth, todayISO } from "../lib/date";
-import {
-  attendanceSpread,
-  averagePosition,
-  busiestWeekday,
-  dailyRanks,
-  memberPerDay,
-  ratingSpread,
-  statusSpread,
-  teamPerDay,
-  totals,
-  weekdayProfile,
-  type PerDay,
-  type ScoreRow,
-} from "../lib/profile";
-import { isConfigured, supabase } from "../lib/supabase";
-import type { DayLog, Entry, Member } from "../lib/types";
+import { addMonths, clock, dateLong, dateShort, monthShort, startOfMonth, todayISO } from "../lib/date";
+import { categoryTint, tallyOf, useHistory, type DayRow } from "../lib/history";
+import { formatBytes, openAttachment } from "../lib/attachments";
+import type { DayMark, Entry, Member } from "../lib/types";
 import { Dialog } from "./Dialog";
-import { ProfileCalendar } from "./ProfileCalendar";
-import { ProfileTrend } from "./ProfileTrend";
-import { Chip, Rating, Slider, cx } from "./ui";
+import { useToast } from "./Toaster";
+import { Chip, ChevronLeft, ChevronRight, Clip, Cookie, cx } from "./ui";
 
-interface Loaded {
-  entries: Entry[];
-  dayLogs: DayLog[];
-  rows: ScoreRow[];
-  members: Member[];
-}
+const FIRST_DAY = "2026-10-01"; // the day the new system began
 
-const EMPTY: Loaded = { entries: [], dayLogs: [], rows: [], members: [] };
-
-/**
- * Position only means something against the rest of the team, and the average
- * position is meant to span the whole history, so this pulls every rollup row
- * for everyone rather than a window for one person. That table is one row per
- * person per day — small enough to fetch whole.
- */
-function useProfile(member: Member | null) {
-  const [data, setData] = useState<Loaded>(EMPTY);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!member || !isConfigured) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const [e, d, sc, m] = await Promise.all([
-          supabase
-            .from("entries")
-            .select(
-              "id,log_date,member_id,created_by,title,details,status,minutes,efficiency,impact,remarks,status_by,status_at,created_at,updated_at",
-            )
-            .eq("member_id", member.id)
-            .order("log_date", { ascending: false })
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("day_logs")
-            .select("id,member_id,log_date,attendance,note,updated_at")
-            .eq("member_id", member.id),
-          supabase
-            .from("daily_scores")
-            .select(
-              "member_id,log_date,tasks,done,minutes,rated,impact_sum,efficiency_sum,score",
-            ),
-          supabase.from("members").select("id,name,title,active").eq("active", true),
-        ]);
-        for (const r of [e, d, sc, m]) if (r.error) throw r.error;
-        if (cancelled) return;
-        setData({
-          entries: (e.data ?? []) as Entry[],
-          dayLogs: (d.data ?? []) as DayLog[],
-          rows: (sc.data ?? []) as ScoreRow[],
-          members: (m.data ?? []) as Member[],
-        });
-      } catch (err) {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Could not load history.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [member]);
-
-  return { data, loading, error };
-}
-
-/* ------------------------------ primitives ------------------------------ */
-
-function Tile({
+function Stat({
   label,
   value,
   foot,
-  muted,
+  tint,
 }: {
   label: string;
   value: string;
-  foot?: React.ReactNode;
-  muted?: boolean;
+  foot?: string;
+  tint?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 border-r border-b border-line px-3 py-2.5 last:border-r-0">
-      <span className="truncate text-[9.5px] font-semibold tracking-[0.11em] text-ink-3 uppercase">
+    <div
+      className="rounded-sm border border-line px-3 py-2.5"
+      style={tint ? { backgroundColor: tint } : undefined}
+    >
+      <p className="text-[9.5px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
         {label}
-      </span>
-      <span
-        className={cx(
-          "tnum text-[18px] leading-none font-semibold tracking-[-0.02em]",
-          muted ? "text-ink-2" : "text-ink",
-        )}
-      >
+      </p>
+      <p className="tnum mt-1 text-[19px] leading-none font-semibold tracking-[-0.02em] text-ink">
         {value}
-      </span>
-      <span className="flex h-[13px] items-center text-[10.5px] text-ink-4">
-        {foot}
-      </span>
+      </p>
+      {foot && <p className="mt-1 text-[10.5px] text-ink-4">{foot}</p>}
     </div>
   );
 }
 
-function Section({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section data-stagger>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
-          {title}
-        </h3>
-        {hint && <span className="text-right text-[11px] text-ink-4">{hint}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function BarRow({
-  label,
-  value,
-  max,
-  caption,
-  emphasis,
-  wideLabel,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  caption?: string;
-  emphasis?: boolean;
-  /** Two-word labels like "Not done" or "Half day" need room to stay on one line. */
-  wideLabel?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3 px-3 py-1.5">
-      <span
-        className={cx(
-          "shrink-0 text-[11.5px] font-medium whitespace-nowrap text-ink-2",
-          wideLabel ? "w-[58px]" : "w-10",
-        )}
-      >
-        {label}
-      </span>
-      <span className="relative h-[7px] flex-1 bg-mute-bg">
-        <span
-          style={{
-            width: `${max ? Math.max((value / max) * 100, value ? 2 : 0) : 0}%`,
-          }}
-          className={cx(
-            "absolute inset-y-0 left-0 transition-[width] duration-500",
-            emphasis ? "bg-ink" : "bg-ink-4",
-          )}
-        />
-      </span>
-      <span className="tnum w-20 shrink-0 text-right text-[11px] text-ink-4">
-        {caption}
-      </span>
-    </div>
-  );
-}
-
-/** One row of the same six measures, so the person and the team line up. */
-function AverageRow({
-  data,
-  label,
-  hint,
-  muted,
-  lastTile,
-}: {
-  data: PerDay;
-  label: string;
-  hint: string;
-  muted?: boolean;
-  lastTile: { label: string; value: string; foot: React.ReactNode };
-}) {
-  return (
-    <div data-stagger>
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <h3 className="text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
-          {label}
-        </h3>
-        <span className="text-right text-[11px] text-ink-4">{hint}</span>
-      </div>
-      <div className="grid grid-cols-2 overflow-hidden rounded-sm border border-line sm:grid-cols-3 lg:grid-cols-6">
-        <Tile
-          label="Score / day"
-          value={data.score.toLocaleString("en-IN")}
-          foot={`${data.scorePerHour}/hr`}
-          muted={muted}
-        />
-        <Tile
-          label="Tasks / day"
-          value={String(data.tasks)}
-          foot={`${data.donePct}% done`}
-          muted={muted}
-        />
-        <Tile
-          label="Time / day"
-          value={formatDuration(data.minutes)}
-          foot={`${data.days} ${data.days === 1 ? "day" : "days"}`}
-          muted={muted}
-        />
-        <Tile
-          label="Efficiency"
-          value={data.efficiency ? data.efficiency.toFixed(2) : "—"}
-          foot={
-            data.efficiency ? (
-              <Slider
-                value={Math.round(data.efficiency)}
-                readOnly
-                onChange={() => {}}
-              />
-            ) : null
-          }
-          muted={muted}
-        />
-        <Tile
-          label="Impact"
-          value={data.impact ? data.impact.toFixed(2) : "—"}
-          foot={
-            data.impact ? (
-              <Rating value={Math.round(data.impact)} readOnly onChange={() => {}} />
-            ) : null
-          }
-          muted={muted}
-        />
-        <Tile
-          label={lastTile.label}
-          value={lastTile.value}
-          foot={lastTile.foot}
-          muted={muted}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------- the view ------------------------------- */
-
+/**
+ * A person's month: what they logged, and what the admin made of each day.
+ * Points, efficiency, impact and average position are all gone — a day is
+ * judged whole, so the history is a run of verdicts.
+ */
 export function MemberProfile({
   member,
   onClose,
-  rankToday,
-  scoreToday,
+  markToday,
 }: {
   member: Member;
   onClose: () => void;
-  rankToday?: number;
-  scoreToday?: number;
+  markToday?: DayMark | null;
 }) {
-  const { data, loading, error } = useProfile(member);
-  const { entries, dayLogs, rows, members } = data;
-  // one month drives both the calendar and the chart under it
+  const toast = useToast();
   const [month, setMonth] = useState(() => startOfMonth(todayISO()));
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const { rows, entries, loading } = useHistory(true, FIRST_DAY);
 
-  const t = useMemo(() => totals(entries), [entries]);
-  const mineAvg = useMemo(() => memberPerDay(rows, member.id), [rows, member.id]);
-  const teamAvg = useMemo(() => teamPerDay(rows), [rows]);
-  const ranks = useMemo(() => dailyRanks(rows), [rows]);
-  const position = useMemo(
-    () => averagePosition(ranks, member.id),
-    [ranks, member.id],
+  const mine = useMemo(
+    () => rows.filter((r) => r.member_id === member.id),
+    [rows, member.id],
   );
-  const week = useMemo(() => weekdayProfile(entries), [entries]);
-  const busy = useMemo(() => busiestWeekday(week), [week]);
-  const effSpread = useMemo(() => ratingSpread(entries, "efficiency"), [entries]);
-  const impSpread = useMemo(() => ratingSpread(entries, "impact"), [entries]);
-  const statuses = useMemo(() => statusSpread(entries), [entries]);
-  const attendance = useMemo(() => attendanceSpread(dayLogs), [dayLogs]);
+  const myEntries = useMemo(
+    () => entries.filter((e) => e.member_id === member.id),
+    [entries, member.id],
+  );
+  const tally = useMemo(() => tallyOf(mine), [mine]);
+  const byDate = useMemo(
+    () => new Map(mine.map((r) => [r.log_date, r])),
+    [mine],
+  );
+
+  /** Every day of the shown month, judged or not. */
+  const days = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const out: { date: string; row: DayRow | undefined }[] = [];
+    for (let d = 1; d <= last; d++) {
+      const date = `${month.slice(0, 7)}-${String(d).padStart(2, "0")}`;
+      if (date < FIRST_DAY || date > todayISO()) continue;
+      out.push({ date, row: byDate.get(date) });
+    }
+    return out;
+  }, [month, byDate]);
+
+  const dayTasks = useMemo(
+    () => (openDay ? myEntries.filter((e) => e.log_date === openDay) : []),
+    [openDay, myEntries],
+  );
+
+  const recent = useMemo(
+    () =>
+      [...myEntries]
+        .sort((a, b) => b.log_date.localeCompare(a.log_date))
+        .slice(0, 8),
+    [myEntries],
+  );
+
+  const best = useMemo(() => {
+    for (const c of CATEGORIES) if (tally.byCategory[c.key]) return c;
+    return null;
+  }, [tally]);
 
   useEffect(() => {
-    if (loading) return;
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        "[data-stagger]",
-        { opacity: 0, y: 8 },
-        { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: "power2.out" },
+        "[data-cell]",
+        { opacity: 0, scale: 0.8 },
+        { opacity: 1, scale: 1, duration: 0.25, stagger: 0.01, ease: "back.out(2)" },
       );
-    });
+    }, grid);
     return () => ctx.revert();
-  }, [loading]);
+  }, [month, mine.length]);
 
-  const weekMax = Math.max(...week.map((w) => w.avgScore), 1);
-  const recent = entries.slice(0, 12);
-  const teamSize = members.length || 1;
+  const todayCat = markToday ? CATEGORY_BY_KEY[markToday.category] : null;
 
   return (
     <Dialog
@@ -328,214 +128,243 @@ export function MemberProfile({
       onClose={onClose}
       title={member.name}
       subtitle={
-        [
-          rankToday ? `rank ${rankToday} today` : null,
-          scoreToday ? `${scoreToday.toLocaleString("en-IN")} pts today` : null,
-          position.avg !== null
-            ? `avg position ${position.avg.toFixed(1)} of ${teamSize}, all time`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" — ") || undefined
+        todayCat
+          ? `Today — ${todayCat.label.toLowerCase()}`
+          : "Since the new system began on 1 October 2026"
       }
-      width={1000}
+      width={900}
     >
-      {error ? (
-        <div className="rounded-sm border border-bad/25 bg-bad-bg px-4 py-3 text-[12.5px] font-medium text-bad">
-          {error}
-        </div>
-      ) : loading ? (
-        <div className="rounded-sm border border-line bg-paper px-4 py-10 text-center text-[12.5px] text-ink-3">
-          Loading history…
-        </div>
-      ) : t.tasks === 0 ? (
-        <div className="rounded-sm border border-line bg-paper px-4 py-10 text-center text-[12.5px] text-ink-3">
-          Nothing logged yet.
+      {loading ? (
+        <div className="flex h-[320px] items-center justify-center text-[12.5px] text-ink-4">
+          Loading…
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
-          <AverageRow
-            data={mineAvg}
-            label={member.name}
-            hint="per day worked"
-            lastTile={{
-              label: "Avg position",
-              value:
-                position.avg !== null
-                  ? `${position.avg.toFixed(1)} / ${teamSize}`
-                  : "—",
-              foot: position.best ? `best ${position.best}` : null,
-            }}
-          />
-
-          <AverageRow
-            data={teamAvg}
-            label="Team average"
-            hint="counts a person only on a day they logged"
-            muted
-            lastTile={{
-              label: "Person-days",
-              value: String(teamAvg.days),
-              foot: `${teamSize} on the portal`,
-            }}
-          />
-
-          <Section title="Activity" hint="shaded by position that day — click a day for its tasks">
-            <ProfileCalendar
-              rows={rows}
-              entries={entries}
-              memberId={member.id}
-              teamSize={teamSize}
-              month={month}
-              onMonthChange={setMonth}
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" data-stagger>
+            <Stat
+              label="Days judged"
+              value={String(tally.judged)}
+              foot={`of ${tally.days} logged`}
             />
-          </Section>
-
-          <Section
-            title="Trend"
-            hint="follows the month above — switch to day for a single week"
-          >
-            <ProfileTrend
-              rows={rows}
-              member={member}
-              members={members}
-              month={month}
+            <Stat
+              label="Best verdict"
+              value={best ? best.short : "—"}
+              foot={best ? `${tally.byCategory[best.key]} day(s)` : "none yet"}
+              tint={best?.bg}
             />
-          </Section>
+            <Stat
+              label="Brownies"
+              value={String(tally.brownies)}
+              foot={`${tally.overtime} overtime · ${tally.holiday} holiday`}
+            />
+            <Stat label="Tasks" value={String(tally.tasks)} foot={`${myEntries.filter((e) => e.status === "done").length} done`} />
+            <Stat label="Time logged" value={formatDuration(tally.minutes)} />
+          </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Section title="Day of the week" hint="average points per day worked">
-              <div className="rounded-sm border border-line bg-surface py-1.5">
-                {week.map((w) => (
-                  <BarRow
-                    key={w.key}
-                    label={w.label}
-                    value={w.avgScore}
-                    max={weekMax}
-                    emphasis={busy?.key === w.key}
-                    caption={
-                      w.days
-                        ? `${w.avgScore.toLocaleString("en-IN")} · ${w.days}d`
-                        : "—"
-                    }
-                  />
-                ))}
-              </div>
-            </Section>
-
-            <Section title="How the work splits">
-              <div className="flex flex-col gap-2">
-                <div className="rounded-sm border border-line bg-surface py-1.5">
-                  {statuses.map((s) => (
-                    <BarRow
-                      key={s.key}
-                      label={STATUS_BY_KEY[s.key as StatusKey].short}
-                      value={s.value}
-                      max={t.tasks}
-                      wideLabel
-                      caption={`${s.value} · ${t.tasks ? Math.round((s.value / t.tasks) * 100) : 0}%`}
-                    />
-                  ))}
-                  <BarRow
-                    label="Given"
-                    value={t.assigned}
-                    max={t.tasks}
-                    caption={`${t.assigned} assigned`}
-                    wideLabel
-                  />
-                </div>
-                <div className="rounded-sm border border-line bg-surface py-1.5">
-                  {attendance
-                    .filter((a) => a.value > 0)
-                    .map((a) => (
-                      <BarRow
-                        key={a.key}
-                        label={ATTENDANCE_BY_KEY[a.key].short}
-                        value={a.value}
-                        max={dayLogs.length || 1}
-                        wideLabel
-                        caption={`${a.value} ${a.value === 1 ? "day" : "days"}`}
+          {/* the verdict mix */}
+          <section data-stagger>
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
+              How the days have been judged
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {CATEGORIES.map((c) => {
+                const n = tally.byCategory[c.key];
+                const pct = tally.judged ? (100 * n) / tally.judged : 0;
+                return (
+                  <div
+                    key={c.key}
+                    className="grid grid-cols-[132px_1fr_30px] items-center gap-3"
+                  >
+                    <span className="text-[11.5px] font-medium" style={{ color: c.ink }}>
+                      {c.label}
+                    </span>
+                    <span className="h-[10px] overflow-hidden rounded-xs bg-mute-bg">
+                      <span
+                        className="block h-full rounded-xs"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: c.bg,
+                          borderRight: n ? `1px solid ${c.line}` : undefined,
+                        }}
                       />
-                    ))}
-                </div>
-              </div>
-            </Section>
-          </div>
+                    </span>
+                    <span className="tnum text-right text-[11.5px] font-semibold text-ink-2">
+                      {n}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Section title="Efficiency given" hint={`${t.rated} rated`}>
-              <div className="rounded-sm border border-line bg-surface py-1.5">
-                {effSpread.map((b) => (
-                  <BarRow
-                    key={b.key}
-                    label={`${b.label}/5`}
-                    value={b.value}
-                    max={Math.max(...effSpread.map((x) => x.value), 1)}
-                    caption={String(b.value)}
-                  />
-                ))}
-              </div>
-            </Section>
-            <Section title="Impact given" hint={`${t.rated} rated`}>
-              <div className="rounded-sm border border-line bg-surface py-1.5">
-                {impSpread.map((b) => (
-                  <BarRow
-                    key={b.key}
-                    label={`${b.label}/5`}
-                    value={b.value}
-                    max={Math.max(...impSpread.map((x) => x.value), 1)}
-                    caption={String(b.value)}
-                  />
-                ))}
-              </div>
-            </Section>
-          </div>
+          {/* the month, day by day */}
+          <section data-stagger>
+            <header className="mb-2 flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Previous month"
+                disabled={month <= startOfMonth(FIRST_DAY)}
+                onClick={() => {
+                  setOpenDay(null);
+                  setMonth(addMonths(month, -1));
+                }}
+                className={cx(
+                  "focus-ring flex size-6 items-center justify-center rounded-xs",
+                  month <= startOfMonth(FIRST_DAY)
+                    ? "cursor-not-allowed text-line-strong"
+                    : "text-ink-3 hover:bg-mute-bg hover:text-ink",
+                )}
+              >
+                <ChevronLeft className="size-3.5" />
+              </button>
+              <span className="tnum min-w-[74px] text-center text-[12px] font-semibold text-ink">
+                {monthShort(month)} {month.slice(0, 4)}
+              </span>
+              <button
+                type="button"
+                aria-label="Next month"
+                disabled={month >= startOfMonth(todayISO())}
+                onClick={() => {
+                  setOpenDay(null);
+                  setMonth(addMonths(month, 1));
+                }}
+                className={cx(
+                  "focus-ring flex size-6 items-center justify-center rounded-xs",
+                  month >= startOfMonth(todayISO())
+                    ? "cursor-not-allowed text-line-strong"
+                    : "text-ink-3 hover:bg-mute-bg hover:text-ink",
+                )}
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+              <span className="ml-auto text-[10.5px] text-ink-4">
+                each square is a day, coloured by its verdict
+              </span>
+            </header>
 
-          <Section
-            title="Recent tasks"
-            hint={`${Math.min(recent.length, 12)} of ${t.tasks}`}
-          >
-            <div className="overflow-hidden rounded-sm border border-line">
-              {recent.map((e) => (
-                <div
-                  key={e.id}
-                  className="flex flex-wrap items-start gap-x-4 gap-y-1 border-b border-line px-3 py-2 last:border-b-0"
-                >
-                  <span className="tnum w-14 shrink-0 text-[11px] text-ink-4">
-                    {dateShort(e.log_date)}
-                  </span>
-                  <span className="min-w-[180px] flex-1 text-[12.5px] leading-[1.45] break-words text-ink">
-                    {e.title}
-                    {e.created_by === null && (
-                      <span className="ml-1.5 text-[10.5px] text-ink-4">
-                        assigned
+            <div ref={grid} className="flex flex-wrap gap-1.5">
+              {days.map(({ date, row }) => {
+                const cat = row?.mark ? CATEGORY_BY_KEY[row.mark.category] : null;
+                const brownies =
+                  (row?.mark?.overtime ? 1 : 0) + (row?.mark?.holiday ? 1 : 0);
+                return (
+                  <button
+                    key={date}
+                    data-cell
+                    type="button"
+                    disabled={!row}
+                    onClick={() => setOpenDay(openDay === date ? null : date)}
+                    title={`${dateLong(date)}${
+                      row
+                        ? ` — ${row.tasks} task(s), ${formatDuration(row.minutes)}${
+                            cat ? `, ${cat.label.toLowerCase()}` : ", not judged"
+                          }`
+                        : " — nothing logged"
+                    }`}
+                    className={cx(
+                      "flex size-[34px] flex-col items-center justify-center rounded-sm border text-[10px] font-semibold transition",
+                      row ? "cursor-pointer hover:scale-105" : "opacity-55",
+                      openDay === date && "ring-1 ring-ink",
+                    )}
+                    style={{
+                      backgroundColor: categoryTint(row?.mark?.category ?? null),
+                      borderColor: cat ? cat.line : "#e5e5e1",
+                      color: cat ? cat.ink : "#78787f",
+                    }}
+                  >
+                    {date.slice(-2)}
+                    {brownies > 0 && (
+                      <span className="flex items-center gap-[1px] text-[8px]">
+                        <Cookie className="size-[8px]" />
+                        {brownies}
                       </span>
                     )}
-                  </span>
-                  <span className="tnum w-14 shrink-0 text-[11.5px] text-ink-3">
-                    {formatDuration(e.minutes)}
-                  </span>
-                  <Chip tone={STATUS_BY_KEY[e.status].tone}>
-                    {STATUS_BY_KEY[e.status].short}
-                  </Chip>
-                  <span className="tnum w-16 shrink-0 text-right text-[11.5px] text-ink-3">
-                    {e.efficiency && e.impact ? `${e.efficiency}/${e.impact}` : "—"}
-                  </span>
-                  <span className="tnum w-14 shrink-0 text-right text-[12px] font-medium text-ink-2">
-                    {e.efficiency && e.impact
-                      ? Math.round(((e.minutes ?? 0) * e.efficiency * e.impact) / 5)
-                      : 0}
-                  </span>
-                </div>
-              ))}
+                  </button>
+                );
+              })}
+              {days.length === 0 && (
+                <p className="text-[12px] text-ink-4">Nothing in this month.</p>
+              )}
             </div>
-          </Section>
+          </section>
+
+          {/* a day, or the recent run */}
+          <section data-stagger>
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
+              {openDay ? dateLong(openDay) : "Recent tasks"}
+            </p>
+            <ul className="flex max-h-[220px] flex-col gap-1.5 overflow-y-auto pr-1">
+              {(openDay ? dayTasks : recent).map((e: Entry) => (
+                <li
+                  key={e.id}
+                  className="rounded-sm border border-line bg-paper px-3 py-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 flex-1 text-[12.5px] leading-[1.45] font-medium break-words text-ink">
+                      {e.title}
+                    </p>
+                    <span className="tnum shrink-0 text-[11.5px] text-ink-3">
+                      {openDay ? formatDuration(e.minutes) : dateShort(e.log_date)}
+                    </span>
+                  </div>
+                  {e.details && (
+                    <p className="mt-1 text-[11.5px] leading-[1.5] break-words text-ink-2">
+                      {e.details}
+                    </p>
+                  )}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Chip tone={STATUS_BY_KEY[e.status].tone} dot>
+                      {STATUS_BY_KEY[e.status].label}
+                    </Chip>
+                    {!openDay && (
+                      <span className="tnum text-[11px] text-ink-3">
+                        {formatDuration(e.minutes)}
+                      </span>
+                    )}
+                    <span className="tnum text-[11px] text-ink-4">
+                      logged {clock(e.created_at)}
+                    </span>
+                    {e.attachment_path && (
+                      <button
+                        type="button"
+                        title={`Open ${e.attachment_name} (${formatBytes(e.attachment_size)})`}
+                        onClick={() =>
+                          void openAttachment(e.attachment_path!).catch((err) =>
+                            toast(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not open the attachment.",
+                              "error",
+                            ),
+                          )
+                        }
+                        className="focus-ring inline-flex max-w-[200px] items-center gap-1 rounded-xs text-[11px] font-medium text-ink-3 hover:text-ink"
+                      >
+                        <Clip className="size-3 shrink-0" />
+                        <span className="truncate underline decoration-line-strong underline-offset-2">
+                          {e.attachment_name}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                  {e.remarks && (
+                    <p className="mt-1.5 border-l-2 border-line-strong pl-2 text-[11.5px] leading-[1.5] break-words text-ink-3">
+                      {e.remarks}
+                    </p>
+                  )}
+                </li>
+              ))}
+              {(openDay ? dayTasks : recent).length === 0 && (
+                <p className="text-[12px] text-ink-4">Nothing logged.</p>
+              )}
+            </ul>
+          </section>
 
           <p className="text-[11px] leading-[1.5] text-ink-4" data-stagger>
-            Averages are per day worked, so nobody is diluted by days they did
-            not log. The team average counts a person only on a day they logged
-            at least one task. Position is a dense rank against everyone on the
-            portal that day. Loaded {clock(new Date().toISOString())}.
+            A day is judged as a whole by an admin, in one of five categories,
+            with up to two brownies — {BROWNIES.map((b) => b.label.toLowerCase()).join(" and ")}.
+            Nothing shows here until that decision is made. History before
+            1 October 2026 was cleared when the system changed.
           </p>
         </div>
       )}

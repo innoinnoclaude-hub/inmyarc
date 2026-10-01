@@ -63,25 +63,61 @@ export function formatDuration(minutes: number | null | undefined): string {
   return `${h}h ${m}m`;
 }
 
-/**
- * score = minutes x (efficiency / 5) x impact
- *
- * Efficiency discounts — every point below 5 removes 20% of the time — while
- * impact scales by its own value, so the top of the range is 5x the minutes.
- * A task missing either rating scores nothing. Mirrors the SQL in
- * refresh_daily_score(); the database is the authority and this is the
- * fallback for a day whose rollup row does not exist yet.
- */
-export function scoreFor(
-  minutes: number | null,
-  efficiency: number | null,
-  impact: number | null,
-): number {
-  if (!minutes || !efficiency || !impact) return 0;
-  return Math.round((minutes * efficiency * impact) / 5);
-}
+/* ------------------------------ the verdict ------------------------------ */
 
-/** 5 -> "100%", 4 -> "80%" ... the share of the time a rating keeps. */
-export function weightPercent(value: number | null): string {
-  return value ? `${value * 20}%` : "—";
-}
+/**
+ * From 1 October 2026 work is not scored task by task. An admin judges the
+ * whole person's day in one of five categories, and the board shows nothing
+ * until that decision is made. The order here is the standing: extraordinary at
+ * the top, not up to the mark at the bottom.
+ *
+ * Colours are flat background tints with ink dark enough to read on them — the
+ * row and every task under it carry the tint, so a day's verdict is visible at
+ * a glance without a legend.
+ */
+export type CategoryKey =
+  | "extraordinary"
+  | "over_performed"
+  | "upto_mark"
+  | "rework"
+  | "not_upto_mark";
+
+export const CATEGORIES: {
+  key: CategoryKey;
+  label: string;
+  short: string;
+  /** 1 is the top of the board. */
+  rank: number;
+  /** row tint */
+  bg: string;
+  /** border for chips on the tint */
+  line: string;
+  /** text and chip colour on the tint */
+  ink: string;
+}[] = [
+  { key: "extraordinary",  label: "Extraordinary",      short: "Extraordinary", rank: 1,
+    bg: "#f7d9e8", line: "#e3a8c8", ink: "#86215a" },
+  { key: "over_performed", label: "Over performed",     short: "Over",          rank: 2,
+    bg: "#d4e4f7", line: "#a3c2e6", ink: "#14447e" },
+  { key: "upto_mark",      label: "Up to the mark",     short: "Up to mark",    rank: 3,
+    bg: "#d6efdb", line: "#a3d4ad", ink: "#176234" },
+  { key: "rework",         label: "Rework",             short: "Rework",        rank: 4,
+    bg: "#fbeabd", line: "#e5cf8c", ink: "#78560a" },
+  { key: "not_upto_mark",  label: "Not up to the mark", short: "Not up to mark", rank: 5,
+    bg: "#fad7d2", line: "#eeb0a8", ink: "#8c2317" },
+];
+
+export const CATEGORY_BY_KEY = Object.fromEntries(
+  CATEGORIES.map((c) => [c.key, c]),
+) as Record<CategoryKey, (typeof CATEGORIES)[number]>;
+
+/**
+ * Two brownies, one each, entirely the admin's call: a day stretched beyond
+ * hours, and a day worked that nobody was meant to work.
+ */
+export type BrownieKey = "overtime" | "holiday";
+
+export const BROWNIES: { key: BrownieKey; label: string; hint: string }[] = [
+  { key: "overtime", label: "Overtime", hint: "Stayed well beyond the day" },
+  { key: "holiday", label: "Holiday", hint: "Worked on a day off" },
+];

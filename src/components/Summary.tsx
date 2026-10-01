@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
-import { formatDuration } from "../config";
+import { CATEGORIES, formatDuration } from "../config";
 import type { RowGroup } from "../lib/types";
 import { cx } from "./ui";
 
@@ -89,13 +89,15 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
     let notDone = 0;
     let rework = 0;
     let minutes = 0;
-    let rated = 0;
-    let impactSum = 0;
-    let efficiencySum = 0;
+    let judged = 0;
+    let brownies = 0;
+    const byCategory = Object.fromEntries(
+      CATEGORIES.map((c) => [c.key, 0]),
+    ) as Record<string, number>;
     const att = { full_day: 0, wfh: 0, half_day: 0, week_off: 0, leave: 0 };
 
     for (const g of groups) {
-      if (g.dayLog !== null || g.entries.length > 0) reported++;
+      if (g.dayLog !== null || g.entries.length > 0 || g.mark) reported++;
       if (g.dayLog) {
         att[g.dayLog.attendance]++;
         if (g.dayLog.attendance === "week_off" || g.dayLog.attendance === "leave")
@@ -108,11 +110,11 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
         else if (e.status === "not_done") notDone++;
         else rework++;
         if (e.minutes) minutes += e.minutes;
-        if (e.impact && e.efficiency) {
-          rated++;
-          impactSum += e.impact;
-          efficiencySum += e.efficiency;
-        }
+      }
+      if (g.mark) {
+        judged++;
+        byCategory[g.mark.category]++;
+        brownies += (g.mark.overtime ? 1 : 0) + (g.mark.holiday ? 1 : 0);
       }
     }
     return {
@@ -124,9 +126,9 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
       notDone,
       rework,
       minutes,
-      avgImpact: rated ? impactSum / rated : null,
-      avgEfficiency: rated ? efficiencySum / rated : null,
-      rated,
+      judged,
+      brownies,
+      byCategory,
       att,
       total: groups.length,
       pct: groups.length ? Math.round((reported / groups.length) * 100) : 0,
@@ -145,7 +147,30 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
   }, [s.pct]);
 
   return (
-    <section className="grid grid-cols-2 overflow-hidden rounded-md border border-line bg-surface sm:grid-cols-4 xl:grid-cols-7">
+    <section className="overflow-hidden rounded-md border border-line bg-surface">
+      {s.judged > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line bg-paper px-4 py-2">
+          <span className="text-[10px] font-semibold tracking-[0.11em] text-ink-3 uppercase">
+            Verdicts
+          </span>
+          {CATEGORIES.map((c) => (
+            <span key={c.key} className="flex items-center gap-1.5">
+              <span
+                className="size-[9px] rounded-[2px] border"
+                style={{ backgroundColor: c.bg, borderColor: c.line }}
+              />
+              <span className="text-[11.5px] text-ink-3">{c.label}</span>
+              <span
+                className="tnum text-[12px] font-semibold"
+                style={{ color: s.byCategory[c.key] ? c.ink : undefined }}
+              >
+                {s.byCategory[c.key]}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8">
       <div className="col-span-2 flex min-w-0 flex-col justify-between gap-2.5 border-r border-b border-line px-4 py-3.5 sm:col-span-1">
         <span className="truncate text-[10px] font-semibold tracking-[0.11em] text-ink-3 uppercase">
           Reported
@@ -203,14 +228,27 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
 
       <Cell
         label="Time logged"
-        foot={
-          s.avgEfficiency !== null
-            ? `eff ${s.avgEfficiency.toFixed(1)} / impact ${s.avgImpact!.toFixed(1)}`
-            : null
-        }
+        foot={s.tasks ? `${s.tasks} tasks` : null}
       >
         <Value text={s.minutes ? formatDuration(s.minutes) : "0m"} />
       </Cell>
+
+      <Cell
+        label="Judged"
+        foot={
+          s.brownies
+            ? `${s.brownies} brownie${s.brownies === 1 ? "" : "s"} given`
+            : s.judged
+              ? "verdicts in"
+              : "awaiting the admin"
+        }
+      >
+        <Value value={s.judged} />
+        <span className="tnum text-[13px] font-medium text-ink-4">
+          / {s.reported}
+        </span>
+      </Cell>
+      </div>
     </section>
   );
 }

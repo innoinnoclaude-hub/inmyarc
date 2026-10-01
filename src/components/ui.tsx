@@ -1,4 +1,3 @@
-import { useRef, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -264,6 +263,28 @@ export function Close({ className }: IconProps) {
   );
 }
 
+/** A cookie, for the brownie marks. Flat, two-tone, no emoji. */
+export function Cookie({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
+      <path
+        d="M8 1.6a6.4 6.4 0 1 0 6.4 6.4 2.6 2.6 0 0 1-3.1-1.7 2.6 2.6 0 0 1-2.2-3.4A6.4 6.4 0 0 0 8 1.6Z"
+        fill="currentColor"
+        opacity=".16"
+      />
+      <path
+        d="M8 1.6a6.4 6.4 0 1 0 6.4 6.4 2.6 2.6 0 0 1-3.1-1.7 2.6 2.6 0 0 1-2.2-3.4A6.4 6.4 0 0 0 8 1.6Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="6" cy="6.4" r="1" fill="currentColor" />
+      <circle cx="9.4" cy="9.8" r="1" fill="currentColor" />
+      <circle cx="5.5" cy="10.4" r=".85" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function Clip({ className }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
@@ -320,47 +341,6 @@ export function Star({ filled, className }: { filled?: boolean; className?: stri
 }
 
 /** Click a star to set the score; click the current score again to clear it. */
-export function Rating({
-  value,
-  onChange,
-  readOnly,
-}: {
-  value: number | null;
-  onChange: (next: number | null) => void;
-  readOnly?: boolean;
-}) {
-  const [hover, setHover] = useState<number | null>(null);
-  const shown = hover ?? value ?? 0;
-  return (
-    <div
-      className="inline-flex items-center gap-1"
-      onMouseLeave={() => setHover(null)}
-      role="group"
-      aria-label={value ? `Rated ${value} out of 5` : "Not rated"}
-    >
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          disabled={readOnly}
-          aria-label={`${n} out of 5`}
-          onMouseEnter={() => !readOnly && setHover(n)}
-          onFocus={() => !readOnly && setHover(n)}
-          onClick={() => onChange(value === n ? null : n)}
-          className={cx(
-            "focus-ring rounded-xs transition-colors duration-100",
-            readOnly ? "cursor-default" : "cursor-pointer",
-            n <= shown ? "text-ink" : "text-line-strong",
-            !readOnly && "hover:text-ink",
-          )}
-        >
-          <Star filled={n <= shown} className="size-[15px]" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /* ------------------------- marked / not marked -------------------------- */
 
 export function TickCircle({ className }: IconProps) {
@@ -448,157 +428,3 @@ export function Download({ className }: IconProps) {
   );
 }
 
-/* ------------------------------- efficiency ------------------------------ */
-
-/**
- * A 1-5 slider driven by pointer events rather than <input type="range">.
- * The native control snaps in coarse jumps and styles inconsistently across
- * browsers; this one follows the pointer exactly, snaps to the nearest stop,
- * captures the pointer so a drag survives leaving the track, and takes arrow
- * keys. Read-only it collapses to a five segment meter that stays legible in a
- * dense table row.
- */
-export function Slider({
-  value,
-  onChange,
-  readOnly,
-  ariaLabel = "Efficiency",
-}: {
-  value: number | null;
-  onChange: (next: number | null) => void;
-  readOnly?: boolean;
-  ariaLabel?: string;
-}) {
-  const track = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [preview, setPreview] = useState<number | null>(null);
-  const shown = preview ?? value;
-
-  if (readOnly) {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <span className="inline-flex items-center gap-[3px]">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <span
-              key={n}
-              className={cx(
-                "h-[9px] w-[7px] rounded-[1px]",
-                value && n <= value ? "bg-ink" : "bg-line-strong",
-              )}
-            />
-          ))}
-        </span>
-        <span className="tnum text-[11.5px] font-medium text-ink-3">
-          {value ? `${value}/5` : "\u2014"}
-        </span>
-      </span>
-    );
-  }
-
-  const at = (clientX: number) => {
-    const el = track.current;
-    if (!el) return 1;
-    const r = el.getBoundingClientRect();
-    const t = Math.min(Math.max((clientX - r.left) / r.width, 0), 1);
-    return Math.round(t * 4) + 1;
-  };
-
-  const commit = (next: number) => {
-    setPreview(next);
-    if (next !== value) onChange(next);
-  };
-
-  return (
-    <span className="inline-flex items-center gap-2 select-none">
-      <div
-        ref={track}
-        role="slider"
-        tabIndex={0}
-        aria-label={ariaLabel}
-        aria-valuemin={1}
-        aria-valuemax={5}
-        aria-valuenow={value ?? undefined}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.currentTarget.setPointerCapture(e.pointerId);
-          setDragging(true);
-          commit(at(e.clientX));
-        }}
-        onPointerMove={(e) => {
-          if (!dragging) return;
-          const next = at(e.clientX);
-          if (next !== shown) commit(next);
-        }}
-        onPointerUp={(e) => {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-          setDragging(false);
-          setPreview(null);
-        }}
-        onPointerCancel={() => {
-          setDragging(false);
-          setPreview(null);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-            e.preventDefault();
-            commit(Math.min((value ?? 0) + 1, 5));
-          }
-          if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-            e.preventDefault();
-            commit(Math.max((value ?? 2) - 1, 1));
-          }
-          if (e.key === "Backspace" || e.key === "Delete") onChange(null);
-        }}
-        className={cx(
-          "focus-ring relative h-5 w-[72px] cursor-pointer touch-none",
-          dragging && "cursor-grabbing",
-        )}
-      >
-        {/* rail */}
-        <span className="absolute top-1/2 left-0 h-[3px] w-full -translate-y-1/2 rounded-[1px] bg-line-strong" />
-        {/* filled portion */}
-        {shown != null && (
-          <span
-            style={{ width: `${((shown - 1) / 4) * 100}%` }}
-            className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-[1px] bg-ink transition-[width] duration-100 ease-out"
-          />
-        )}
-        {/* stops */}
-        {[1, 2, 3, 4, 5].map((n) => (
-          <span
-            key={n}
-            style={{ left: `${((n - 1) / 4) * 100}%` }}
-            className={cx(
-              "absolute top-1/2 size-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full",
-              shown != null && n <= shown ? "bg-surface" : "bg-ink-4/60",
-            )}
-          />
-        ))}
-        {/* thumb */}
-        {shown != null && (
-          <span
-            style={{ left: `${((shown - 1) / 4) * 100}%` }}
-            className={cx(
-              "absolute top-1/2 size-[12px] -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-ink bg-ink transition-[left] duration-100 ease-out",
-              dragging && "scale-110",
-            )}
-          />
-        )}
-      </div>
-      <span className="tnum w-7 text-[11.5px] font-medium text-ink-2">
-        {shown ? `${shown}/5` : "\u2014"}
-      </span>
-      {value != null && (
-        <button
-          type="button"
-          aria-label="Clear efficiency"
-          title="Clear"
-          onClick={() => onChange(null)}
-          className="focus-ring rounded-xs px-1 text-[11px] text-ink-4 hover:text-ink-2"
-        >
-          &times;
-        </button>
-      )}
-    </span>
-  );
-}

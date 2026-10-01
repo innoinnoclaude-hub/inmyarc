@@ -130,12 +130,11 @@ function Portal() {
           memberById={d.memberById}
           identity={identity}
           canEditTasks={isConfigured && !locked}
-          canRate={false}
+          canJudge={false}
           canRemark={isConfigured && !locked}
           canAdd={isConfigured && !locked}
           onEdit={setEditing}
-          onImpact={() => {}}
-          onEfficiency={() => {}}
+          onMark={() => {}}
           onStatus={(id, s) =>
             void guard(() => d.setStatus(id, s, identity), "Status updated.")
           }
@@ -188,8 +187,9 @@ function Portal() {
           key={profile.id}
           member={profile}
           onClose={() => setProfile(null)}
-          rankToday={d.groups.find((g) => g.member.id === profile.id)?.rank}
-          scoreToday={d.groups.find((g) => g.member.id === profile.id)?.score}
+          markToday={
+            d.groups.find((g) => g.member.id === profile.id)?.mark ?? null
+          }
         />
       )}
 

@@ -3,10 +3,14 @@ import gsap from "gsap";
 import {
   ATTENDANCE,
   ATTENDANCE_BY_KEY,
+  BROWNIES,
+  CATEGORIES,
+  CATEGORY_BY_KEY,
   STATUS,
   STATUS_BY_KEY,
   formatDuration,
   type AttendanceKey,
+  type CategoryKey,
   type StatusKey,
 } from "../config";
 import { clock } from "../lib/date";
@@ -17,11 +21,10 @@ import type { Entry, Member, RowGroup } from "../lib/types";
 import {
   Chip,
   Clip,
+  Cookie,
   CrossCircle,
   Pencil,
   Plus,
-  Rating,
-  Slider,
   TickCircle,
   Trash,
   cx,
@@ -34,15 +37,20 @@ interface Props {
   /** Which columns this surface may change. The board and the admin page use
    *  the same table with different permissions. */
   canEditTasks: boolean;
-  canRate: boolean;
+  /** Only the admin page may judge a day. */
+  canJudge: boolean;
   canRemark: boolean;
   /** Show the add link on a member with no entries. */
   canAdd: boolean;
   /** Overrides the empty-row link text (the admin page says "Add task"). */
   addLabel?: string;
   onStatus: (entryId: string, status: StatusKey) => void;
-  onImpact: (entryId: string, value: number | null) => void;
-  onEfficiency: (entryId: string, value: number | null) => void;
+  /** Set, change or clear the day's verdict and its brownies. */
+  onMark: (
+    memberId: string,
+    category: CategoryKey | null,
+    brownies: { overtime: boolean; holiday: boolean },
+  ) => void;
   onEdit: (entry: Entry) => void;
   onRemarks: (entryId: string, remarks: string) => void;
   onDelete: (entryId: string) => void;
@@ -52,14 +60,13 @@ interface Props {
 }
 
 const COLS = [
-  { key: "sno", label: "#", width: "w-[5%]" },
+  { key: "sno", label: "#", width: "w-[4.5%]" },
   { key: "member", label: "Member", width: "w-[11%]" },
-  { key: "task", label: "Task", width: "w-[23%]" },
-  { key: "time", label: "Time", width: "w-[6.5%]" },
-  { key: "status", label: "Status", width: "w-[12.5%]" },
-  { key: "efficiency", label: "Efficiency", width: "w-[11.5%]" },
-  { key: "impact", label: "Impact", width: "w-[10.5%]" },
-  { key: "remarks", label: "Remarks", width: "w-[12%]" },
+  { key: "verdict", label: "Verdict", width: "w-[13.5%]" },
+  { key: "task", label: "Task", width: "w-[26%]" },
+  { key: "time", label: "Time", width: "w-[6%]" },
+  { key: "status", label: "Status", width: "w-[12%]" },
+  { key: "remarks", label: "Remarks", width: "w-[19%]" },
   { key: "actions", label: "", width: "w-[8%]" },
 ];
 
@@ -68,13 +75,12 @@ export function LogTable({
   memberById,
   identity,
   canEditTasks,
-  canRate,
+  canJudge,
   canRemark,
   canAdd,
   addLabel,
   onStatus,
-  onImpact,
-  onEfficiency,
+  onMark,
   onEdit,
   onRemarks,
   onDelete,
@@ -87,11 +93,10 @@ export function LogTable({
   const root = useRef<HTMLDivElement>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const signature = groups
-    .map((g) => `${g.member.id}:${g.entries.length}:${g.score}`)
+    .map((g) => `${g.member.id}:${g.entries.length}:${g.mark?.category ?? ""}`)
     .join("|");
-  /** The board ranks by score the moment the day has any entry at all. */
-  const ranked = groups.some((g) => g.entries.length > 0);
-  const topScore = ranked ? Math.max(...groups.map((g) => g.score)) : 0;
+  /** Places appear only once an admin has judged somebody. */
+  const ranked = groups.some((g) => g.mark);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -137,9 +142,11 @@ export function LogTable({
                 title={
                   c.key === "sno"
                     ? ranked
-                      ? "Ranked by score — minutes taken x stars, summed across the day"
-                      : "Alphabetical until the first entry of the day"
-                    : undefined
+                      ? "Ordered by verdict — everyone in a category shares the place"
+                      : "Alphabetical until an admin judges the day"
+                    : c.key === "verdict"
+                      ? "The admin's verdict on the whole day, plus brownies for overtime and for working a holiday"
+                      : undefined
                 }
                 className={cx(
                   "px-3 py-2.5 text-[10.5px] font-semibold tracking-[0.1em] text-ink-3 uppercase",
@@ -154,6 +161,9 @@ export function LogTable({
 
         {groups.map((group) => {
           const span = Math.max(group.entries.length, 1);
+          /** The verdict colours the row and every task under it. */
+          const cat = group.mark ? CATEGORY_BY_KEY[group.mark.category] : null;
+          const tint = cat ? { backgroundColor: cat.bg } : undefined;
           const att = group.dayLog
             ? ATTENDANCE_BY_KEY[group.dayLog.attendance]
             : null;
@@ -170,7 +180,11 @@ export function LogTable({
                 (entry, index) => (
                   <tr
                     key={entry ? entry.id : "empty"}
-                    className="group/row align-top transition-colors duration-150 hover:bg-paper/60"
+                    style={tint}
+                    className={cx(
+                      "group/row align-top transition-colors duration-150",
+                      cat ? "hover:brightness-[0.985]" : "hover:bg-paper/60",
+                    )}
                   >
                     {index === 0 && (
                       <>
@@ -180,8 +194,20 @@ export function LogTable({
                           className="border-r border-line px-2 py-3 align-top"
                         >
                           <div className="flex flex-col items-center gap-1.5">
-                            <span className="tnum text-[12px] font-semibold text-ink-3">
-                              {String(group.rank).padStart(2, "0")}
+                            <span
+                              title={
+                                group.rank
+                                  ? `${cat?.label} — place ${group.rank} today`
+                                  : "Not judged yet"
+                              }
+                              className={cx(
+                                "tnum text-[12px] font-semibold",
+                                group.rank === 1 ? "text-ink" : "text-ink-3",
+                              )}
+                            >
+                              {group.rank
+                                ? String(group.rank).padStart(2, "0")
+                                : "–"}
                             </span>
                             <span
                               title={
@@ -255,24 +281,21 @@ export function LogTable({
                               </span>
                             )}
                           </div>
-                          {group.score > 0 && (
-                            <p
-                              title="Minutes taken x stars, summed across the day"
-                              className={cx(
-                                "tnum mt-1.5 text-[11px] font-medium",
-                                group.score === topScore
-                                  ? "text-ink"
-                                  : "text-ink-4",
-                              )}
-                            >
-                              {group.score.toLocaleString("en-IN")} pts
-                            </p>
-                          )}
                           {group.dayLog?.note && (
                             <p className="mt-1.5 text-[11.5px] leading-[1.45] break-words text-ink-3">
                               {group.dayLog.note}
                             </p>
                           )}
+                        </td>
+                        <td
+                          rowSpan={span}
+                          className="border-r border-line px-3 py-3 align-top"
+                        >
+                          <Verdict
+                            group={group}
+                            canJudge={canJudge}
+                            onMark={onMark}
+                          />
                         </td>
                       </>
                     )}
@@ -357,22 +380,6 @@ export function LogTable({
                         </td>
 
                         <td className="px-3 py-3">
-                          <Slider
-                            value={entry.efficiency}
-                            readOnly={!canRate}
-                            onChange={(next) => onEfficiency(entry.id, next)}
-                          />
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <Rating
-                            value={entry.impact}
-                            readOnly={!canRate}
-                            onChange={(next) => onImpact(entry.id, next)}
-                          />
-                        </td>
-
-                        <td className="px-3 py-3">
                           <RemarkEditor
                             value={entry.remarks}
                             readOnly={!canRemark}
@@ -434,7 +441,7 @@ export function LogTable({
                         </td>
                       </>
                     ) : (
-                      <td colSpan={7} className="px-3 py-3">
+                      <td colSpan={5} className="px-3 py-3">
                         <div className="flex items-center gap-2">
                           <span className="text-[12.5px] text-ink-4">
                             No entries logged.
@@ -459,6 +466,137 @@ export function LogTable({
           );
         })}
       </table>
+    </div>
+  );
+}
+
+/** The category label, wearing its own colour. */
+function CatChip({
+  category,
+  faint,
+}: {
+  category: CategoryKey;
+  faint?: boolean;
+}) {
+  const c = CATEGORY_BY_KEY[category];
+  return (
+    <span
+      className="inline-flex items-center rounded-xs border px-1.5 py-[3px] text-[11px] font-semibold whitespace-nowrap"
+      style={{
+        color: c.ink,
+        borderColor: c.line,
+        backgroundColor: faint ? "rgba(255,255,255,0.72)" : "#ffffff",
+      }}
+    >
+      {c.label}
+    </span>
+  );
+}
+
+/** One earned brownie, shown as a cookie. */
+function Brownie({ label, earned }: { label: string; earned: boolean }) {
+  if (!earned) return null;
+  return (
+    <span
+      title={`Brownie — ${label.toLowerCase()}`}
+      className="inline-flex items-center gap-1 rounded-xs border border-[#e3cba4] bg-[#fdf4e5] px-1.5 py-[2px] text-[10.5px] font-semibold text-[#7a5312]"
+    >
+      <Cookie className="size-3" />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The day's verdict. Nobody sees anything until an admin has decided; on the
+ * admin page this is where they decide it, and where the two brownies are
+ * handed out.
+ */
+function Verdict({
+  group,
+  canJudge,
+  onMark,
+}: {
+  group: RowGroup;
+  canJudge: boolean;
+  onMark: Props["onMark"];
+}) {
+  const mark = group.mark;
+  const brownies = {
+    overtime: !!mark?.overtime,
+    holiday: !!mark?.holiday,
+  };
+
+  if (!canJudge) {
+    return mark ? (
+      <div className="flex flex-col items-start gap-1.5">
+        <CatChip category={mark.category} faint />
+        {(brownies.overtime || brownies.holiday) && (
+          <div className="flex flex-wrap gap-1">
+            {BROWNIES.map((b) => (
+              <Brownie key={b.key} label={b.label} earned={brownies[b.key]} />
+            ))}
+          </div>
+        )}
+      </div>
+    ) : (
+      <span className="text-[11.5px] text-ink-4">Awaiting review</span>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <InlineSelect
+        value={mark?.category ?? ""}
+        options={[
+          { key: "", label: "Not judged yet" },
+          ...CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
+        ]}
+        onChange={(v) =>
+          onMark(group.member.id, (v || null) as CategoryKey | null, brownies)
+        }
+      >
+        {mark ? (
+          <CatChip category={mark.category} />
+        ) : (
+          <Chip tone="mute">Judge the day</Chip>
+        )}
+      </InlineSelect>
+
+      <div className="flex flex-wrap gap-1">
+        {BROWNIES.map((b) => {
+          const on = brownies[b.key];
+          return (
+            <button
+              key={b.key}
+              type="button"
+              disabled={!mark}
+              title={
+                mark
+                  ? `${on ? "Take back" : "Give"} the ${b.label.toLowerCase()} brownie — ${b.hint.toLowerCase()}`
+                  : "Judge the day first, then the brownies"
+              }
+              onClick={() =>
+                mark &&
+                onMark(group.member.id, mark.category, {
+                  ...brownies,
+                  [b.key]: !on,
+                })
+              }
+              className={cx(
+                "focus-ring inline-flex items-center gap-1 rounded-xs border px-1.5 py-[2px] text-[10.5px] font-semibold transition",
+                on
+                  ? "border-[#e3cba4] bg-[#fdf4e5] text-[#7a5312]"
+                  : "border-line bg-surface text-ink-4 hover:border-line-strong hover:text-ink-3",
+                !mark && "cursor-not-allowed opacity-45",
+              )}
+            >
+              <Cookie className={cx("size-3", !on && "opacity-55")} />
+              {b.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

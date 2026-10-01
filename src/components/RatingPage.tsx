@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import gsap from "gsap";
-import { APP } from "../config";
+import { APP, CATEGORY_BY_KEY } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
@@ -137,15 +137,19 @@ function Board() {
     date,
   ]);
 
+  /** How much of the day has actually been judged. */
   const counts = useMemo(() => {
-    let total = 0;
-    let rated = 0;
-    for (const g of d.groups)
-      for (const e of g.entries) {
-        total++;
-        if (e.impact && e.efficiency) rated++;
-      }
-    return { total, rated };
+    const present = d.groups.filter(
+      (g) => g.entries.length > 0 || g.dayLog !== null || g.mark,
+    );
+    return {
+      total: present.length,
+      judged: present.filter((g) => g.mark).length,
+      brownies: d.groups.reduce(
+        (n, g) => n + (g.mark?.overtime ? 1 : 0) + (g.mark?.holiday ? 1 : 0),
+        0,
+      ),
+    };
   }, [d.groups]);
 
   const guard = async (fn: () => Promise<unknown>, ok: string) => {
@@ -182,10 +186,19 @@ function Board() {
             {dateLong(date)}
           </p>
           <span className="shrink-0">
-            <Chip tone={counts.total && counts.rated === counts.total ? "ok" : "wait"}>
-              {counts.rated} / {counts.total} scored
+            <Chip
+              tone={counts.total && counts.judged === counts.total ? "ok" : "wait"}
+            >
+              {counts.judged} / {counts.total} judged
             </Chip>
           </span>
+          {counts.brownies > 0 && (
+            <span className="hidden shrink-0 xl:inline-flex">
+              <Chip tone="mute">
+                {counts.brownies} brownie{counts.brownies === 1 ? "" : "s"}
+              </Chip>
+            </span>
+          )}
           {date !== today && (
             <span className="hidden shrink-0 lg:inline-flex">
               <Chip tone="mute">Archive</Chip>
@@ -295,23 +308,19 @@ function Board() {
         memberById={d.memberById}
         identity={null}
         canEditTasks
-        canRate
+        canJudge
         canRemark
         canAdd
         addLabel="Add task"
         onStatus={(id, st) =>
           void guard(() => d.setStatus(id, st, null), "Status updated.")
         }
-        onImpact={(id, v) =>
+        onMark={(memberId, category, brownies) =>
           void guard(
-            () => d.setImpact(id, v),
-            v === null ? "Impact cleared." : `Impact set to ${v} / 5.`,
-          )
-        }
-        onEfficiency={(id, v) =>
-          void guard(
-            () => d.setEfficiency(id, v),
-            v === null ? "Efficiency cleared." : `Efficiency set to ${v} / 5.`,
+            () => d.setMark(memberId, category, brownies),
+            category
+              ? `${d.memberById.get(memberId)?.name ?? "Day"} — ${CATEGORY_BY_KEY[category].label.toLowerCase()}.`
+              : "Verdict cleared.",
           )
         }
         onEdit={setEditing}
@@ -351,8 +360,9 @@ function Board() {
           key={profile.id}
           member={profile}
           onClose={() => setProfile(null)}
-          rankToday={d.groups.find((g) => g.member.id === profile.id)?.rank}
-          scoreToday={d.groups.find((g) => g.member.id === profile.id)?.score}
+          markToday={
+            d.groups.find((g) => g.member.id === profile.id)?.mark ?? null
+          }
         />
       )}
 

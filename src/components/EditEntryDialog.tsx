@@ -15,9 +15,7 @@ import {
   Close,
   Duration,
   Label,
-  Rating,
   Segmented,
-  Slider,
   TextArea,
   TextInput,
 } from "./ui";
@@ -213,11 +211,10 @@ export function EditEntryDialog({
             />
           </div>
           <div>
-            <Label hint="set at /rating">Efficiency &amp; impact</Label>
-            <div className="flex h-8 flex-wrap items-center gap-x-3 gap-y-1">
-              <Slider value={entry.efficiency} readOnly onChange={() => {}} />
-              <Rating value={entry.impact} readOnly onChange={() => {}} />
-            </div>
+            <Label hint="whole day, at /rating">Verdict</Label>
+            <p className="flex h-8 items-center text-[11.5px] leading-[1.45] text-ink-4">
+              Days are judged as a whole, not task by task.
+            </p>
           </div>
         </div>
 

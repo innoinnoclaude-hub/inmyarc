@@ -1,9 +1,9 @@
 import {
   ATTENDANCE_BY_KEY,
   APP,
+  CATEGORY_BY_KEY,
   STATUS_BY_KEY,
   formatDuration,
-  scoreFor,
 } from "../config";
 import { clock, dateLong, weekdayLong } from "./date";
 import type { Member, RowGroup } from "./types";
@@ -20,15 +20,13 @@ const USABLE = PAGE_W - MARGIN * 2; // 277mm
 const COLUMNS: { key: string; header: string; width: number }[] = [
   { key: "rank", header: "#", width: 8 },
   { key: "member", header: "Member", width: 24 },
+  { key: "verdict", header: "Verdict", width: 28 },
   { key: "day", header: "Day", width: 24 },
-  { key: "task", header: "Task", width: 55 },
-  { key: "detail", header: "Detail", width: 46 },
+  { key: "task", header: "Task", width: 58 },
+  { key: "detail", header: "Detail", width: 48 },
   { key: "time", header: "Time", width: 15 },
   { key: "status", header: "Status", width: 21 },
-  { key: "efficiency", header: "Efficiency", width: 18 },
-  { key: "impact", header: "Impact", width: 15 },
-  { key: "score", header: "Score", width: 14 },
-  { key: "remarks", header: "Remarks", width: 37 },
+  { key: "remarks", header: "Remarks", width: 51 },
 ];
 
 const INK: [number, number, number] = [23, 23, 26];
@@ -44,10 +42,13 @@ function summarise(groups: RowGroup[]) {
   let done = 0;
   let open = 0;
   let minutes = 0;
-  let rated = 0;
-  let impactSum = 0;
-  let efficiencySum = 0;
+  let judged = 0;
+  let brownies = 0;
   for (const g of groups) {
+    if (g.mark) {
+      judged++;
+      brownies += (g.mark.overtime ? 1 : 0) + (g.mark.holiday ? 1 : 0);
+    }
     if (g.dayLog !== null || g.entries.length > 0) reported++;
     if (g.dayLog) {
       if (g.dayLog.attendance === "week_off" || g.dayLog.attendance === "leave")
@@ -59,11 +60,6 @@ function summarise(groups: RowGroup[]) {
       if (e.status === "done") done++;
       else open++;
       if (e.minutes) minutes += e.minutes;
-      if (e.impact && e.efficiency) {
-        rated++;
-        impactSum += e.impact;
-        efficiencySum += e.efficiency;
-      }
     }
   }
   return {
@@ -75,15 +71,15 @@ function summarise(groups: RowGroup[]) {
     done,
     open,
     minutes,
-    avgImpact: rated ? impactSum / rated : null,
-    avgEfficiency: rated ? efficiencySum / rated : null,
+    judged,
+    brownies,
   };
 }
 
 /**
  * One row per task; a member with nothing logged still gets a row.
  * The name is repeated on every row so each line stands alone across a page
- * break, but the points and the day detail appear only on the first, so a
+ * break, but the verdict and the day detail appear only on the first, so a
  * block does not read as a set of duplicates.
  */
 function buildRows(groups: RowGroup[]) {
@@ -98,11 +94,20 @@ function buildRows(groups: RowGroup[]) {
     const day = [att ? att.label : "Not marked", g.dayLog?.note]
       .filter(Boolean)
       .join(" — ");
-    const lead = `${g.member.name}${g.score ? `\n${g.score.toLocaleString("en-IN")} pts` : ""}`;
+    const lead = g.member.name;
+    const brownie = g.mark
+      ? [g.mark.overtime ? "overtime" : null, g.mark.holiday ? "holiday" : null]
+          .filter(Boolean)
+          .join(" + ")
+      : "";
+    const verdict = g.mark
+      ? `${CATEGORY_BY_KEY[g.mark.category].label}${brownie ? `\n+ ${brownie}` : ""}`
+      : "Not judged";
+    const place = g.rank ? String(g.rank) : "–";
 
     if (g.entries.length === 0) {
       rows.push({
-        cells: [String(g.rank), lead, day, "No entries logged.", "", "", "", "", "", "", ""],
+        cells: [place, lead, verdict, day, "No entries logged.", "", "", "", ""],
         group: index,
         empty: true,
         first: true,
@@ -112,16 +117,14 @@ function buildRows(groups: RowGroup[]) {
     g.entries.forEach((e, i) => {
       rows.push({
         cells: [
-          i === 0 ? String(g.rank) : "",
+          i === 0 ? place : "",
           i === 0 ? lead : g.member.name,
+          i === 0 ? verdict : "",
           i === 0 ? day : "",
           e.created_by === null ? `${e.title}\n(assigned)` : e.title,
           e.details ?? "",
           formatDuration(e.minutes),
           STATUS_BY_KEY[e.status].label,
-          e.efficiency ? `${e.efficiency} / 5` : "—",
-          e.impact ? `${e.impact} / 5` : "—",
-          String(scoreFor(e.minutes, e.efficiency, e.impact)),
           e.remarks ?? "",
         ],
         group: index,
@@ -180,7 +183,7 @@ export async function buildDayReport(
         i,
         {
           cellWidth: c.width,
-          halign: ["rank", "efficiency", "impact", "score"].includes(c.key)
+          halign: ["rank", "time"].includes(c.key)
             ? "center"
             : "left",
           fontStyle: c.key === "task" ? "bold" : "normal",
@@ -242,8 +245,8 @@ export async function buildDayReport(
         `Done ${s.done}`,
         `Open ${s.open}`,
         `Time ${formatDuration(s.minutes)}`,
-        `Avg efficiency ${s.avgEfficiency !== null ? s.avgEfficiency.toFixed(2) : "—"}`,
-        `Avg impact ${s.avgImpact !== null ? s.avgImpact.toFixed(2) : "—"}`,
+        `Judged ${s.judged}/${s.reported}`,
+        `Brownies ${s.brownies}`,
       ];
       doc.text(bits.join("    "), MARGIN, MARGIN + 15);
 

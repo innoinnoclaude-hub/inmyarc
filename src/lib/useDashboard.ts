@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { todayISO } from "./date";
-import type { DayLog, Entry, Member, RowGroup } from "./types";
-import { scoreFor, type AttendanceKey, type StatusKey } from "../config";
+import type { DayLog, DayMark, Entry, Member, RowGroup } from "./types";
+import { CATEGORY_BY_KEY, type AttendanceKey, type CategoryKey, type StatusKey } from "../config";
 import {
   NO_ATTACHMENT,
   uploadAttachment,
@@ -29,11 +29,12 @@ export function draftMinutes(d: Pick<DraftEntry, "hours" | "mins">): number | nu
   return Math.min(Math.max(total, 0), 1440);
 }
 
-/** The per-day rollup the database maintains; the board's single source of
- *  truth for score, so the table and the graph can never disagree. */
+/** The per-day tally the database maintains by trigger: how much work was
+ *  logged, with no judgement in it. */
 export interface DayScore {
   member_id: string;
-  score: number;
+  tasks: number;
+  minutes: number;
 }
 
 interface State {
@@ -41,6 +42,7 @@ interface State {
   dayLogs: DayLog[];
   entries: Entry[];
   scores: DayScore[];
+  marks: DayMark[];
   /** First day the board may write, from `editable_from()` in the database.
    *  Null until it loads, which leaves only today open. */
   openFrom: string | null;
@@ -53,6 +55,7 @@ const EMPTY: State = {
   dayLogs: [],
   entries: [],
   scores: [],
+  marks: [],
   openFrom: null,
   loading: true,
   error: null,
@@ -76,26 +79,16 @@ function message(e: unknown): string {
 }
 
 /**
- * Fallback for a day whose rollup row does not exist yet; the authority is
- * `daily_scores`, computed by a database trigger, so the board and the graph
- * cannot drift apart.
- */
-export function scoreOf(entries: Entry[]): number {
-  return entries.reduce(
-    (sum, e) => sum + scoreFor(e.minutes, e.efficiency, e.impact),
-    0,
-  );
-}
-
-/**
  * Build the day's rows.
  *
  * Rows = everyone currently on the team, plus anyone retired who still has
  * something on this day, so archived days never lose their history.
  *
- * Order: alphabetical while the day is still empty, then ranked by score as
- * soon as the first entry lands. Ties fall back to alphabetical so the list
- * never jitters between equal scores, and they share a DENSE_RANK place.
+ * Order is the standing, and the standing is the verdict: extraordinary first,
+ * then over performed, up to the mark, rework and not up to the mark. Everyone
+ * inside a category shares one place — the place is the category — and brownies
+ * break the order within it without changing the number. Anyone an admin has
+ * not judged yet sits below the judged, alphabetically, with no place at all.
  *
  * Pure and exported so the ordering can be tested without mounting the hook.
  */
@@ -103,9 +96,9 @@ export function buildGroups(
   members: Member[],
   dayLogs: DayLog[],
   entries: Entry[],
-  scores: DayScore[] = [],
+  marks: DayMark[] = [],
 ): RowGroup[] {
-  const scoreByMember = new Map(scores.map((s) => [s.member_id, s.score]));
+  const markByMember = new Map(marks.map((m) => [m.member_id, m]));
   const logByMember = new Map(dayLogs.map((d) => [d.member_id, d]));
   const entriesByMember = new Map<string, Entry[]>();
   for (const entry of entries) {
@@ -116,45 +109,36 @@ export function buildGroups(
 
   const rows = members
     .filter((m) => m.active || logByMember.has(m.id) || entriesByMember.has(m.id))
-    .map((member) => {
-      const own = entriesByMember.get(member.id) ?? [];
-      return {
-        member,
-        dayLog: logByMember.get(member.id) ?? null,
-        entries: own,
-        // the database rollup is the authority; the local sum is only a
-        // fallback for a day whose rollup row does not exist yet
-        score: scoreByMember.get(member.id) ?? scoreOf(own),
-      };
-    });
+    .map((member) => ({
+      member,
+      dayLog: logByMember.get(member.id) ?? null,
+      entries: entriesByMember.get(member.id) ?? [],
+      mark: markByMember.get(member.id) ?? null,
+    }));
 
-  if (entries.length === 0) {
-    // the query already returns A-Z; number the rows in that order
-    return rows.map((r, i) => ({ ...r, rank: i + 1 }));
-  }
+  const brownies = (r: (typeof rows)[number]) =>
+    (r.mark?.overtime ? 1 : 0) + (r.mark?.holiday ? 1 : 0);
+  const rankOf = (r: (typeof rows)[number]) =>
+    r.mark ? CATEGORY_BY_KEY[r.mark.category].rank : Infinity;
 
-  const sorted = rows.sort(
-    (a, b) => b.score - a.score || a.member.name.localeCompare(b.member.name),
+  const sorted = [...rows].sort(
+    (a, b) =>
+      rankOf(a) - rankOf(b) ||
+      brownies(b) - brownies(a) ||
+      a.member.name.localeCompare(b.member.name),
   );
 
-  // DENSE_RANK: the place only advances when the score actually changes
-  let place = 0;
-  let previous: number | null = null;
-  return sorted.map((r) => {
-    if (previous === null || r.score !== previous) {
-      place += 1;
-      previous = r.score;
-    }
-    return { ...r, rank: place };
-  });
+  // places run 1, 1, 2, 3 … over the categories actually present, so the best
+  // verdict of the day always reads as first
+  const present = [...new Set(sorted.filter((r) => r.mark).map(rankOf))].sort(
+    (a, b) => a - b,
+  );
+  return sorted.map((r) => ({
+    ...r,
+    rank: r.mark ? present.indexOf(rankOf(r)) + 1 : null,
+  }));
 }
 
-/**
- * `passcode` is null on the board and set on /rating. Writes to an open day
- * (see `isOpenDay`) go straight at the tables; writes to a locked day go
- * through the passcode-gated functions instead, because RLS refuses the direct
- * route.
- */
 export function useDashboard(date: string, passcode: string | null) {
   const [state, setState] = useState<State>(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -206,7 +190,7 @@ export function useDashboard(date: string, passcode: string | null) {
       const target = dateRef.current;
       if (!opts.quiet) setState((s) => ({ ...s, loading: true, error: null }));
       try {
-        const [m, d, e, sc, win] = await Promise.all([
+        const [m, d, e, sc, mk, win] = await Promise.all([
           supabase
             .from("members")
             .select("id,name,title,active")
@@ -218,13 +202,17 @@ export function useDashboard(date: string, passcode: string | null) {
           supabase
             .from("entries")
             .select(
-              "id,log_date,member_id,created_by,title,details,status,minutes,efficiency,impact,remarks,attachment_path,attachment_name,attachment_type,attachment_size,status_by,status_at,created_at,updated_at",
+              "id,log_date,member_id,created_by,title,details,status,minutes,remarks,attachment_path,attachment_name,attachment_type,attachment_size,status_by,status_at,created_at,updated_at",
             )
             .eq("log_date", target)
             .order("created_at", { ascending: true }),
           supabase
             .from("daily_scores")
-            .select("member_id,score")
+            .select("member_id,tasks,minutes")
+            .eq("log_date", target),
+          supabase
+            .from("day_marks")
+            .select("member_id,log_date,category,overtime,holiday,marked_at")
             .eq("log_date", target),
           supabase.rpc("editable_from"),
         ]);
@@ -232,12 +220,14 @@ export function useDashboard(date: string, passcode: string | null) {
         if (d.error) throw d.error;
         if (e.error) throw e.error;
         if (sc.error) throw sc.error;
+        if (mk.error) throw mk.error;
         if (dateRef.current !== target) return; // a newer date won the race
         setState((s) => ({
           members: (m.data ?? []) as Member[],
           dayLogs: (d.data ?? []) as DayLog[],
           entries: (e.data ?? []) as Entry[],
           scores: (sc.data ?? []) as DayScore[],
+          marks: (mk.data ?? []) as DayMark[],
           // if the window can't be read, keep the last known one rather than
           // failing the whole board — the database still enforces it
           openFrom:
@@ -277,6 +267,11 @@ export function useDashboard(date: string, passcode: string | null) {
         { event: "*", schema: "public", table: "daily_scores" },
         () => void load({ quiet: true }),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "day_marks" },
+        () => void load({ quiet: true }),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -302,8 +297,8 @@ export function useDashboard(date: string, passcode: string | null) {
 
   const groups = useMemo<RowGroup[]>(
     () =>
-      buildGroups(state.members, state.dayLogs, state.entries, state.scores),
-    [state.members, state.dayLogs, state.entries, state.scores],
+      buildGroups(state.members, state.dayLogs, state.entries, state.marks),
+    [state.members, state.dayLogs, state.entries, state.marks],
   );
 
   const memberById = useMemo(
@@ -607,29 +602,27 @@ export function useDashboard(date: string, passcode: string | null) {
   );
 
   /**
-   * Neither rating is writable directly — the columns are not in anon's grant,
-   * so both go through their passcode-gated function.
+   * The verdict and its brownies. Only an admin can set one, and only through
+   * the passcode-gated function — the browser has no write on `day_marks` at
+   * all. A null category clears it and the day goes back to unjudged.
    */
-  const setImpact = useCallback(
-    (entryId: string, value: number | null) =>
+  const setMark = useCallback(
+    (
+      memberId: string,
+      category: CategoryKey | null,
+      brownies: { overtime: boolean; holiday: boolean } = {
+        overtime: false,
+        holiday: false,
+      },
+    ) =>
       run(async () => {
-        const { error } = await supabase.rpc("set_impact", {
+        const { error } = await supabase.rpc("admin_set_mark", {
           p_pass: needPass(),
-          p_id: entryId,
-          p_value: value,
-        });
-        if (error) throw error;
-      }),
-    [run],
-  );
-
-  const setEfficiency = useCallback(
-    (entryId: string, value: number | null) =>
-      run(async () => {
-        const { error } = await supabase.rpc("set_efficiency", {
-          p_pass: needPass(),
-          p_id: entryId,
-          p_value: value,
+          p_member: memberId,
+          p_date: dateRef.current,
+          p_category: category,
+          p_overtime: brownies.overtime,
+          p_holiday: brownies.holiday,
         });
         if (error) throw error;
       }),
@@ -718,8 +711,7 @@ export function useDashboard(date: string, passcode: string | null) {
     setStatus,
     addEntry,
     updateEntry,
-    setImpact,
-    setEfficiency,
+    setMark,
     setRemarks,
     deleteEntry,
     setAttendance,

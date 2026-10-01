@@ -1,4 +1,4 @@
-import type { AttendanceKey, StatusKey } from "../config";
+import type { AttendanceKey, CategoryKey, StatusKey } from "../config";
 
 export interface Member {
   id: string;
@@ -26,10 +26,6 @@ export interface Entry {
   details: string | null;
   status: StatusKey;
   minutes: number | null;
-  /** 1-5 slider: how well it was done. */
-  efficiency: number | null;
-  /** 1-5 stars: how much it mattered. */
-  impact: number | null;
   remarks: string | null;
   /** One optional file in the `task-files` bucket. Path is null when there is
    *  none; the four move together. */
@@ -43,15 +39,30 @@ export interface Entry {
   updated_at: string;
 }
 
+/**
+ * An admin's verdict on one person's day. Absent until they decide — the board
+ * shows no colour and no place before that.
+ */
+export interface DayMark {
+  member_id: string;
+  log_date: string;
+  category: CategoryKey;
+  /** The two brownies: a long day, and a day that should have been off. */
+  overtime: boolean;
+  holiday: boolean;
+  marked_at: string;
+}
+
 /** One member's slice of a given day, ready for rendering. */
 export interface RowGroup {
   member: Member;
   dayLog: DayLog | null;
   entries: Entry[];
-  /** Sum of (minutes taken x stars) across the day. Unrated or untimed
-   *  tasks contribute nothing. Drives the ranking once the day has begun. */
-  score: number;
-  /** DENSE_RANK over score: equal scores share a place and the next place
-   *  follows immediately (1, 2, 2, 3 — never 1, 2, 2, 4). */
-  rank: number;
+  /** The admin's verdict, or null while the day is still unjudged. */
+  mark: DayMark | null;
+  /**
+   * Place on the day's board. Everyone in a category shares it — the standing
+   * is the category, not a number per person — and it is null until judged.
+   */
+  rank: number | null;
 }
