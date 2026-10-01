@@ -192,10 +192,7 @@ export function LogTable({
                         {/* S.No + whether this person has marked their day */}
                         <td
                           rowSpan={span}
-                          className="border-r border-line py-3 pr-2 pl-[9px] align-top"
-                          style={{
-                            boxShadow: `inset 4px 0 0 ${cat ? cat.ink : "#d4d4cf"}`,
-                          }}
+                          className="border-r border-line px-2 py-3 align-top"
                         >
                           <div className="flex flex-col items-center gap-1.5">
                             <span
