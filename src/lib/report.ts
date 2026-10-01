@@ -1,7 +1,7 @@
 import {
   ATTENDANCE_BY_KEY,
   APP,
-  CATEGORY_BY_KEY,
+  categoryFor,
   STATUS_BY_KEY,
   formatDuration,
 } from "../config";
@@ -100,8 +100,9 @@ function buildRows(groups: RowGroup[]) {
           .filter(Boolean)
           .join(" + ")
       : "";
-    const verdict = g.mark
-      ? `${CATEGORY_BY_KEY[g.mark.category].label}${brownie ? `\n+ ${brownie}` : ""}`
+    const cat = categoryFor(g.mark?.category);
+    const verdict = cat
+      ? `${cat.label}${brownie ? `\n+ ${brownie}` : ""}`
       : "Not judged";
     const place = g.rank ? String(g.rank) : "–";
 

@@ -69,7 +69,8 @@ export function formatDuration(minutes: number | null | undefined): string {
  * From 1 October 2026 work is not scored task by task. An admin judges the
  * whole person's day in one of five categories, and the board shows nothing
  * until that decision is made. The order here is the standing: extraordinary at
- * the top, not up to the mark at the bottom.
+ * the top, not up to the mark at the bottom — the picker shows them the other
+ * way up, as a ladder climbing from the worst to the best.
  *
  * Colours are flat background tints with ink dark enough to read on them — the
  * row and every task under it carry the tint, so a day's verdict is visible at
@@ -79,7 +80,7 @@ export type CategoryKey =
   | "extraordinary"
   | "over_performed"
   | "upto_mark"
-  | "rework"
+  | "can_be_better"
   | "not_upto_mark";
 
 export const CATEGORIES: {
@@ -101,7 +102,7 @@ export const CATEGORIES: {
     bg: "#d4e4f7", line: "#a3c2e6", ink: "#14447e" },
   { key: "upto_mark",      label: "Up to the mark",     short: "Up to mark",    rank: 3,
     bg: "#d6efdb", line: "#a3d4ad", ink: "#176234" },
-  { key: "rework",         label: "Rework",             short: "Rework",        rank: 4,
+  { key: "can_be_better",  label: "Can be better",      short: "Can be better", rank: 4,
     bg: "#fbeabd", line: "#e5cf8c", ink: "#78560a" },
   { key: "not_upto_mark",  label: "Not up to the mark", short: "Not up to mark", rank: 5,
     bg: "#fad7d2", line: "#eeb0a8", ink: "#8c2317" },
@@ -110,6 +111,18 @@ export const CATEGORIES: {
 export const CATEGORY_BY_KEY = Object.fromEntries(
   CATEGORIES.map((c) => [c.key, c]),
 ) as Record<CategoryKey, (typeof CATEGORIES)[number]>;
+
+/**
+ * Look a category up without trusting it. A value can arrive that this build
+ * has never heard of — a page left open across a rename, or a row written by a
+ * newer deploy — and an unknown verdict must read as "not judged yet" rather
+ * than take the board down.
+ */
+export function categoryFor(key: string | null | undefined) {
+  return key && key in CATEGORY_BY_KEY
+    ? CATEGORY_BY_KEY[key as CategoryKey]
+    : null;
+}
 
 /**
  * Two brownies, one each, entirely the admin's call: a day stretched beyond

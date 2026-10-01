@@ -25,7 +25,7 @@ No server to run, deploys to Vercel as a static site.
 
    1. `supabase/schema.sql`
    2. `supabase/seed.sql`
-   3. `supabase/migrations/` **0006 through 0017** — skip 0002–0005, which are
+   3. `supabase/migrations/` **0006 through 0018** — skip 0002–0005, which are
       already folded into `schema.sql`
    4. set the admin passcode (see *Locking and the passcode*); 0007 seeds a
       random one nobody knows
@@ -162,13 +162,18 @@ one of five categories, and may add up to two brownies:
 | Extraordinary | 1 | light pink |
 | Over performed | 2 | light blue |
 | Up to the mark | 3 | light green |
-| Rework | 4 | yellow |
+| Can be better | 4 | yellow |
 | Not up to the mark | 5 | red |
 
 | Brownie | For |
 | --- | --- |
 | Overtime | stayed well beyond the day |
 | Holiday | worked on a day off |
+
+The admin picks a level from a ladder with all five on screen, climbing from
+*not up to the mark* at the foot to *extraordinary* at the top; clicking the
+level already in force clears it. The column sits at the right-hand end of the
+table, out of the way of the day's work.
 
 **Nothing is shown until the admin decides.** Until then the person reads
 *Awaiting review* and has no place. Once judged, their row and every task under
@@ -235,7 +240,7 @@ so the roster can only change from the SQL editor.
 ## Status
 
 Schema, RLS, grants and realtime are applied to the live project, through
-migration 0017. The roster is seeded with the 19 team members. **The log starts
+migration 0018. The roster is seeded with the 19 team members. **The log starts
 on 1 October 2026** — everything before that was cleared when per-task scoring
 was replaced by the daily verdict (a JSON export was taken first and kept
 outside the repo).

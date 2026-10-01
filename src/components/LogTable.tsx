@@ -5,7 +5,7 @@ import {
   ATTENDANCE_BY_KEY,
   BROWNIES,
   CATEGORIES,
-  CATEGORY_BY_KEY,
+  categoryFor,
   STATUS,
   STATUS_BY_KEY,
   formatDuration,
@@ -62,12 +62,13 @@ interface Props {
 const COLS = [
   { key: "sno", label: "#", width: "w-[4.5%]" },
   { key: "member", label: "Member", width: "w-[11%]" },
-  { key: "verdict", label: "Verdict", width: "w-[13.5%]" },
   { key: "task", label: "Task", width: "w-[26%]" },
   { key: "time", label: "Time", width: "w-[6%]" },
-  { key: "status", label: "Status", width: "w-[12%]" },
-  { key: "remarks", label: "Remarks", width: "w-[19%]" },
-  { key: "actions", label: "", width: "w-[8%]" },
+  { key: "status", label: "Status", width: "w-[11.5%]" },
+  { key: "remarks", label: "Remarks", width: "w-[17%]" },
+  // the verdict sits at the far right, out of the way of the day's work
+  { key: "verdict", label: "Verdict", width: "w-[16.5%]" },
+  { key: "actions", label: "", width: "w-[7.5%]" },
 ];
 
 export function LogTable({
@@ -162,7 +163,7 @@ export function LogTable({
         {groups.map((group) => {
           const span = Math.max(group.entries.length, 1);
           /** The verdict colours the row and every task under it. */
-          const cat = group.mark ? CATEGORY_BY_KEY[group.mark.category] : null;
+          const cat = categoryFor(group.mark?.category);
           const tint = cat ? { backgroundColor: cat.bg } : undefined;
           const att = group.dayLog
             ? ATTENDANCE_BY_KEY[group.dayLog.attendance]
@@ -287,16 +288,6 @@ export function LogTable({
                             </p>
                           )}
                         </td>
-                        <td
-                          rowSpan={span}
-                          className="border-r border-line px-3 py-3 align-top"
-                        >
-                          <Verdict
-                            group={group}
-                            canJudge={canJudge}
-                            onMark={onMark}
-                          />
-                        </td>
                       </>
                     )}
 
@@ -388,6 +379,19 @@ export function LogTable({
                           />
                         </td>
 
+                        {index === 0 && (
+                          <td
+                            rowSpan={span}
+                            className="border-l border-line px-3 py-3 align-top"
+                          >
+                            <Verdict
+                              group={group}
+                              canJudge={canJudge}
+                              onMark={onMark}
+                            />
+                          </td>
+                        )}
+
                         <td className="px-2 py-3">
                           {(canAdd || !frozen) && (
                             <div className="flex items-center justify-end gap-0.5">
@@ -441,7 +445,8 @@ export function LogTable({
                         </td>
                       </>
                     ) : (
-                      <td colSpan={5} className="px-3 py-3">
+                      <>
+                      <td colSpan={4} className="px-3 py-3">
                         <div className="flex items-center gap-2">
                           <span className="text-[12.5px] text-ink-4">
                             No entries logged.
@@ -458,6 +463,19 @@ export function LogTable({
                           )}
                         </div>
                       </td>
+
+                        <td
+                          rowSpan={span}
+                          className="border-l border-line px-3 py-3 align-top"
+                        >
+                          <Verdict
+                            group={group}
+                            canJudge={canJudge}
+                            onMark={onMark}
+                          />
+                        </td>
+                        <td />
+                      </>
                     )}
                   </tr>
                 ),
@@ -470,6 +488,9 @@ export function LogTable({
   );
 }
 
+/** The picker climbs: not up to the mark at the foot, extraordinary at the top. */
+const LADDER = [...CATEGORIES].sort((a, b) => b.rank - a.rank);
+
 /** The category label, wearing its own colour. */
 function CatChip({
   category,
@@ -478,7 +499,8 @@ function CatChip({
   category: CategoryKey;
   faint?: boolean;
 }) {
-  const c = CATEGORY_BY_KEY[category];
+  const c = categoryFor(category);
+  if (!c) return null;
   return (
     <span
       className="inline-flex items-center rounded-xs border px-1.5 py-[3px] text-[11px] font-semibold whitespace-nowrap"
@@ -545,23 +567,50 @@ function Verdict({
   }
 
   return (
-    <div className="flex flex-col items-start gap-1.5">
-      <InlineSelect
-        value={mark?.category ?? ""}
-        options={[
-          { key: "", label: "Not judged yet" },
-          ...CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
-        ]}
-        onChange={(v) =>
-          onMark(group.member.id, (v || null) as CategoryKey | null, brownies)
-        }
+    <div className="flex flex-col items-stretch gap-1.5">
+      {/* a ladder, not a dropdown: every level is on screen, climbing from the
+          worst to the best, and the one in force is filled in */}
+      <div
+        role="group"
+        aria-label={`Verdict for ${group.member.name}`}
+        className="flex flex-col gap-[3px]"
       >
-        {mark ? (
-          <CatChip category={mark.category} />
-        ) : (
-          <Chip tone="mute">Judge the day</Chip>
-        )}
-      </InlineSelect>
+        {LADDER.map((c) => {
+          const on = mark?.category === c.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              aria-pressed={on}
+              title={
+                on
+                  ? `${group.member.name} is marked ${c.label.toLowerCase()} — click to clear`
+                  : `Mark ${group.member.name} as ${c.label.toLowerCase()}`
+              }
+              onClick={() =>
+                onMark(group.member.id, on ? null : c.key, brownies)
+              }
+              className={cx(
+                "focus-ring flex items-center gap-1.5 rounded-xs border px-1.5 py-[3px] text-left text-[10.5px] font-semibold transition",
+                on
+                  ? "shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
+                  : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink",
+              )}
+              style={
+                on
+                  ? { backgroundColor: c.bg, borderColor: c.ink, color: c.ink }
+                  : undefined
+              }
+            >
+              <span
+                className="size-[8px] shrink-0 rounded-[2px] border"
+                style={{ backgroundColor: c.bg, borderColor: c.line }}
+              />
+              <span className="truncate">{c.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex flex-wrap gap-1">
         {BROWNIES.map((b) => {

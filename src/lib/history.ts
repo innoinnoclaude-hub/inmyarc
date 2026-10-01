@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { startOfMonth, startOfWeek, todayISO } from "./date";
-import {
-  CATEGORIES,
-  CATEGORY_BY_KEY,
-  type CategoryKey,
-} from "../config";
+import { CATEGORIES, categoryFor, type CategoryKey } from "../config";
 import type { DayMark, Entry, Member } from "./types";
 
 /**
@@ -60,7 +56,7 @@ export function addTo(t: Tally, row: DayRow): Tally {
   t.days += 1;
   t.tasks += row.tasks;
   t.minutes += row.minutes;
-  if (row.mark) {
+  if (row.mark && categoryFor(row.mark.category)) {
     t.judged += 1;
     t.byCategory[row.mark.category] += 1;
     if (row.mark.overtime) t.overtime += 1;
@@ -130,7 +126,7 @@ export function categoryOf(row: DayRow | undefined): CategoryKey | null {
 }
 
 export function categoryTint(key: CategoryKey | null): string {
-  return key ? CATEGORY_BY_KEY[key].bg : "#eceae5";
+  return categoryFor(key)?.bg ?? "#eceae5";
 }
 
 /* ------------------------------- loading -------------------------------- */

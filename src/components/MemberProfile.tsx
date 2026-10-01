@@ -3,7 +3,7 @@ import gsap from "gsap";
 import {
   BROWNIES,
   CATEGORIES,
-  CATEGORY_BY_KEY,
+  categoryFor,
   STATUS_BY_KEY,
   formatDuration,
 } from "../config";
@@ -120,7 +120,7 @@ export function MemberProfile({
     return () => ctx.revert();
   }, [month, mine.length]);
 
-  const todayCat = markToday ? CATEGORY_BY_KEY[markToday.category] : null;
+  const todayCat = categoryFor(markToday?.category);
 
   return (
     <Dialog
@@ -244,7 +244,7 @@ export function MemberProfile({
 
             <div ref={grid} className="flex flex-wrap gap-1.5">
               {days.map(({ date, row }) => {
-                const cat = row?.mark ? CATEGORY_BY_KEY[row.mark.category] : null;
+                const cat = categoryFor(row?.mark?.category);
                 const brownies =
                   (row?.mark?.overtime ? 1 : 0) + (row?.mark?.holiday ? 1 : 0);
                 return (

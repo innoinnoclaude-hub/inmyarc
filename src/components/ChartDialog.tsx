@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CATEGORIES, CATEGORY_BY_KEY, formatDuration } from "../config";
+import { CATEGORIES, formatDuration } from "../config";
 import {
   bucketOf,
   leaderboard,
@@ -320,5 +320,3 @@ export function ChartDialog({
     </Dialog>
   );
 }
-
-export { CATEGORY_BY_KEY };

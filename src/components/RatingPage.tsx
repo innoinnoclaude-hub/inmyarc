@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import gsap from "gsap";
-import { APP, CATEGORY_BY_KEY } from "../config";
+import { APP, categoryFor } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
@@ -319,7 +319,7 @@ function Board() {
           void guard(
             () => d.setMark(memberId, category, brownies),
             category
-              ? `${d.memberById.get(memberId)?.name ?? "Day"} — ${CATEGORY_BY_KEY[category].label.toLowerCase()}.`
+              ? `${d.memberById.get(memberId)?.name ?? "Day"} — ${(categoryFor(category)?.label ?? category).toLowerCase()}.`
               : "Verdict cleared.",
           )
         }

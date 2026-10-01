@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { todayISO } from "./date";
 import type { DayLog, DayMark, Entry, Member, RowGroup } from "./types";
-import { CATEGORY_BY_KEY, type AttendanceKey, type CategoryKey, type StatusKey } from "../config";
+import { categoryFor, type AttendanceKey, type CategoryKey, type StatusKey } from "../config";
 import {
   NO_ATTACHMENT,
   uploadAttachment,
@@ -119,7 +119,7 @@ export function buildGroups(
   const brownies = (r: (typeof rows)[number]) =>
     (r.mark?.overtime ? 1 : 0) + (r.mark?.holiday ? 1 : 0);
   const rankOf = (r: (typeof rows)[number]) =>
-    r.mark ? CATEGORY_BY_KEY[r.mark.category].rank : Infinity;
+    categoryFor(r.mark?.category)?.rank ?? Infinity;
 
   const sorted = [...rows].sort(
     (a, b) =>
@@ -130,13 +130,16 @@ export function buildGroups(
 
   // places run 1, 1, 2, 3 … over the categories actually present, so the best
   // verdict of the day always reads as first
-  const present = [...new Set(sorted.filter((r) => r.mark).map(rankOf))].sort(
+  const present = [...new Set(sorted.map(rankOf).filter(Number.isFinite))].sort(
     (a, b) => a - b,
   );
-  return sorted.map((r) => ({
-    ...r,
-    rank: r.mark ? present.indexOf(rankOf(r)) + 1 : null,
-  }));
+  return sorted.map((r) => {
+    const rank = rankOf(r);
+    return {
+      ...r,
+      rank: Number.isFinite(rank) ? present.indexOf(rank) + 1 : null,
+    };
+  });
 }
 
 export function useDashboard(date: string, passcode: string | null) {
