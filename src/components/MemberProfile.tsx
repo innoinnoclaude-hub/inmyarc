@@ -3,6 +3,7 @@ import gsap from "gsap";
 import {
   BROWNIES,
   CATEGORIES,
+  brownieCount,
   categoryFor,
   STATUS_BY_KEY,
   formatDuration,
@@ -155,7 +156,9 @@ export function MemberProfile({
             <Stat
               label="Brownies"
               value={String(tally.brownies)}
-              foot={`${tally.overtime} overtime · ${tally.holiday} holiday`}
+              foot={BROWNIES.map(
+                (b) => `${tally.byBrownie[b.key]} ${b.label.toLowerCase()}`,
+              ).join(" · ")}
             />
             <Stat label="Tasks" value={String(tally.tasks)} foot={`${myEntries.filter((e) => e.status === "done").length} done`} />
             <Stat label="Time logged" value={formatDuration(tally.minutes)} />
@@ -245,8 +248,7 @@ export function MemberProfile({
             <div ref={grid} className="flex flex-wrap gap-1.5">
               {days.map(({ date, row }) => {
                 const cat = categoryFor(row?.mark?.category);
-                const brownies =
-                  (row?.mark?.overtime ? 1 : 0) + (row?.mark?.holiday ? 1 : 0);
+                const brownies = brownieCount(row?.mark);
                 return (
                   <button
                     key={date}

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { startOfMonth, startOfWeek, todayISO } from "./date";
-import { CATEGORIES, categoryFor, type CategoryKey } from "../config";
+import {
+  BROWNIES,
+  CATEGORIES,
+  brownieCount,
+  categoryFor,
+  type BrownieKey,
+  type CategoryKey,
+} from "../config";
 import type { DayMark, Entry, Member } from "./types";
 
 /**
@@ -17,8 +24,8 @@ export interface Tally {
   minutes: number;
   judged: number;
   brownies: number;
-  overtime: number;
-  holiday: number;
+  /** How many days earned each brownie. */
+  byBrownie: Record<BrownieKey, number>;
   /** How many days ended in each category. */
   byCategory: Record<CategoryKey, number>;
 }
@@ -30,8 +37,10 @@ export function emptyTally(): Tally {
     minutes: 0,
     judged: 0,
     brownies: 0,
-    overtime: 0,
-    holiday: 0,
+    byBrownie: Object.fromEntries(BROWNIES.map((b) => [b.key, 0])) as Record<
+      BrownieKey,
+      number
+    >,
     byCategory: Object.fromEntries(CATEGORIES.map((c) => [c.key, 0])) as Record<
       CategoryKey,
       number
@@ -59,9 +68,8 @@ export function addTo(t: Tally, row: DayRow): Tally {
   if (row.mark && categoryFor(row.mark.category)) {
     t.judged += 1;
     t.byCategory[row.mark.category] += 1;
-    if (row.mark.overtime) t.overtime += 1;
-    if (row.mark.holiday) t.holiday += 1;
-    t.brownies += (row.mark.overtime ? 1 : 0) + (row.mark.holiday ? 1 : 0);
+    for (const b of BROWNIES) if (row.mark[b.key]) t.byBrownie[b.key] += 1;
+    t.brownies += brownieCount(row.mark);
   }
   return t;
 }
@@ -174,7 +182,7 @@ export function useHistory(open: boolean, from: string) {
           .lte("log_date", today),
         supabase
           .from("day_marks")
-          .select("member_id,log_date,category,overtime,holiday,marked_at")
+          .select("member_id,log_date,category,overtime,holiday,hero,marked_at")
           .gte("log_date", from)
           .lte("log_date", today),
       ]);

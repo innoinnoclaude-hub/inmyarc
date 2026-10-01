@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
-import { CATEGORIES, formatDuration } from "../config";
+import { CATEGORIES, brownieCount, formatDuration } from "../config";
 import type { RowGroup } from "../lib/types";
 import { cx } from "./ui";
 
@@ -114,7 +114,7 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
       if (g.mark) {
         judged++;
         byCategory[g.mark.category]++;
-        brownies += (g.mark.overtime ? 1 : 0) + (g.mark.holiday ? 1 : 0);
+        brownies += brownieCount(g.mark);
       }
     }
     return {

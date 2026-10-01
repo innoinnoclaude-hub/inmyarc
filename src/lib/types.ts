@@ -47,9 +47,11 @@ export interface DayMark {
   member_id: string;
   log_date: string;
   category: CategoryKey;
-  /** The two brownies: a long day, and a day that should have been off. */
+  /** The brownies: a long day, a day that should have been off, and a day
+   *  somebody saved. */
   overtime: boolean;
   holiday: boolean;
+  hero: boolean;
   marked_at: string;
 }
 

@@ -1,6 +1,8 @@
 import {
   ATTENDANCE_BY_KEY,
   APP,
+  BROWNIES,
+  brownieCount,
   categoryFor,
   STATUS_BY_KEY,
   formatDuration,
@@ -47,7 +49,7 @@ function summarise(groups: RowGroup[]) {
   for (const g of groups) {
     if (g.mark) {
       judged++;
-      brownies += (g.mark.overtime ? 1 : 0) + (g.mark.holiday ? 1 : 0);
+      brownies += brownieCount(g.mark);
     }
     if (g.dayLog !== null || g.entries.length > 0) reported++;
     if (g.dayLog) {
@@ -95,11 +97,9 @@ function buildRows(groups: RowGroup[]) {
       .filter(Boolean)
       .join(" — ");
     const lead = g.member.name;
-    const brownie = g.mark
-      ? [g.mark.overtime ? "overtime" : null, g.mark.holiday ? "holiday" : null]
-          .filter(Boolean)
-          .join(" + ")
-      : "";
+    const brownie = BROWNIES.filter((b) => g.mark?.[b.key])
+      .map((b) => b.label.toLowerCase())
+      .join(" + ");
     const cat = categoryFor(g.mark?.category);
     const verdict = cat
       ? `${cat.label}${brownie ? `\n+ ${brownie}` : ""}`

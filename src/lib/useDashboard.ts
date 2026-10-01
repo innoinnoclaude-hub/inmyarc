@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
 import { todayISO } from "./date";
 import type { DayLog, DayMark, Entry, Member, RowGroup } from "./types";
-import { categoryFor, type AttendanceKey, type CategoryKey, type StatusKey } from "../config";
+import {
+  brownieCount,
+  categoryFor,
+  NO_BROWNIES,
+  type AttendanceKey,
+  type Brownies,
+  type CategoryKey,
+  type StatusKey,
+} from "../config";
 import {
   NO_ATTACHMENT,
   uploadAttachment,
@@ -116,8 +124,7 @@ export function buildGroups(
       mark: markByMember.get(member.id) ?? null,
     }));
 
-  const brownies = (r: (typeof rows)[number]) =>
-    (r.mark?.overtime ? 1 : 0) + (r.mark?.holiday ? 1 : 0);
+  const brownies = (r: (typeof rows)[number]) => brownieCount(r.mark);
   const rankOf = (r: (typeof rows)[number]) =>
     categoryFor(r.mark?.category)?.rank ?? Infinity;
 
@@ -215,7 +222,7 @@ export function useDashboard(date: string, passcode: string | null) {
             .eq("log_date", target),
           supabase
             .from("day_marks")
-            .select("member_id,log_date,category,overtime,holiday,marked_at")
+            .select("member_id,log_date,category,overtime,holiday,hero,marked_at")
             .eq("log_date", target),
           supabase.rpc("editable_from"),
         ]);
@@ -613,10 +620,7 @@ export function useDashboard(date: string, passcode: string | null) {
     (
       memberId: string,
       category: CategoryKey | null,
-      brownies: { overtime: boolean; holiday: boolean } = {
-        overtime: false,
-        holiday: false,
-      },
+      brownies: Brownies = NO_BROWNIES,
     ) =>
       run(async () => {
         const { error } = await supabase.rpc("admin_set_mark", {
@@ -626,6 +630,7 @@ export function useDashboard(date: string, passcode: string | null) {
           p_category: category,
           p_overtime: brownies.overtime,
           p_holiday: brownies.holiday,
+          p_hero: brownies.hero,
         });
         if (error) throw error;
       }),

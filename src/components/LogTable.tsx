@@ -5,11 +5,13 @@ import {
   ATTENDANCE_BY_KEY,
   BROWNIES,
   CATEGORIES,
+  browniesOf,
   categoryFor,
   STATUS,
   STATUS_BY_KEY,
   formatDuration,
   type AttendanceKey,
+  type Brownies,
   type CategoryKey,
   type StatusKey,
 } from "../config";
@@ -49,7 +51,7 @@ interface Props {
   onMark: (
     memberId: string,
     category: CategoryKey | null,
-    brownies: { overtime: boolean; holiday: boolean },
+    brownies: Brownies,
   ) => void;
   onEdit: (entry: Entry) => void;
   onRemarks: (entryId: string, remarks: string) => void;
@@ -146,7 +148,7 @@ export function LogTable({
                       ? "Ordered by verdict — everyone in a category shares the place"
                       : "Alphabetical until an admin judges the day"
                     : c.key === "verdict"
-                      ? "The admin's verdict on the whole day, plus brownies for overtime and for working a holiday"
+                      ? "The admin's verdict on the whole day, plus brownies for overtime, for working a holiday, and for saving the day"
                       : undefined
                 }
                 className={cx(
@@ -516,8 +518,7 @@ function CatChip({
 }
 
 /** One earned brownie, shown as a cookie. */
-function Brownie({ label, earned }: { label: string; earned: boolean }) {
-  if (!earned) return null;
+function Brownie({ label }: { label: string }) {
   return (
     <span
       title={`Brownie — ${label.toLowerCase()}`}
@@ -544,19 +545,17 @@ function Verdict({
   onMark: Props["onMark"];
 }) {
   const mark = group.mark;
-  const brownies = {
-    overtime: !!mark?.overtime,
-    holiday: !!mark?.holiday,
-  };
+  const brownies = browniesOf(mark);
+  const earned = BROWNIES.filter((b) => brownies[b.key]);
 
   if (!canJudge) {
     return mark ? (
       <div className="flex flex-col items-start gap-1.5">
         <CatChip category={mark.category} faint />
-        {(brownies.overtime || brownies.holiday) && (
+        {earned.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {BROWNIES.map((b) => (
-              <Brownie key={b.key} label={b.label} earned={brownies[b.key]} />
+            {earned.map((b) => (
+              <Brownie key={b.key} label={b.label} />
             ))}
           </div>
         )}

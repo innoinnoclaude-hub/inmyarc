@@ -125,12 +125,35 @@ export function categoryFor(key: string | null | undefined) {
 }
 
 /**
- * Two brownies, one each, entirely the admin's call: a day stretched beyond
- * hours, and a day worked that nobody was meant to work.
+ * The brownies, one each and entirely the admin's call: a day stretched beyond
+ * hours, a day worked that nobody was meant to work, and a day somebody pulled
+ * the team out of trouble. Independent of the verdict — any day can earn them.
  */
-export type BrownieKey = "overtime" | "holiday";
+export type BrownieKey = "overtime" | "holiday" | "hero";
 
 export const BROWNIES: { key: BrownieKey; label: string; hint: string }[] = [
   { key: "overtime", label: "Overtime", hint: "Stayed well beyond the day" },
   { key: "holiday", label: "Holiday", hint: "Worked on a day off" },
+  { key: "hero", label: "Hero", hint: "Pulled the team out of trouble" },
 ];
+
+/** Which brownies a day carries, as a plain object the UI can spread. */
+export type Brownies = Record<BrownieKey, boolean>;
+
+export const NO_BROWNIES: Brownies = Object.fromEntries(
+  BROWNIES.map((b) => [b.key, false]),
+) as Brownies;
+
+/**
+ * Read the brownies off a verdict. Everything counts them through here, so
+ * adding a fourth means adding one line above and nothing else.
+ */
+export function browniesOf(mark: Partial<Brownies> | null | undefined): Brownies {
+  return Object.fromEntries(
+    BROWNIES.map((b) => [b.key, !!mark?.[b.key]]),
+  ) as Brownies;
+}
+
+export function brownieCount(mark: Partial<Brownies> | null | undefined): number {
+  return BROWNIES.reduce((n, b) => n + (mark?.[b.key] ? 1 : 0), 0);
+}

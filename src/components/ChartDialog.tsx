@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CATEGORIES, formatDuration } from "../config";
+import { BROWNIES, CATEGORIES, formatDuration } from "../config";
 import {
   bucketOf,
   leaderboard,
@@ -243,7 +243,9 @@ export function ChartDialog({
                     {tally.brownies > 0 && (
                       <span
                         className="inline-flex items-center gap-0.5 text-[#7a5312]"
-                        title={`${tally.overtime} overtime, ${tally.holiday} holiday`}
+                        title={BROWNIES.map(
+                          (b) => `${tally.byBrownie[b.key]} ${b.label.toLowerCase()}`,
+                        ).join(", ")}
                       >
                         <Cookie className="size-3" />
                         {tally.brownies}
@@ -312,7 +314,9 @@ export function ChartDialog({
             ))}
             <span className="ml-auto flex items-center gap-1.5 text-[11px] text-ink-4">
               <Cookie className="size-3.5" />
-              {team.overtime} overtime · {team.holiday} holiday
+              {BROWNIES.map(
+                (b) => `${team.byBrownie[b.key]} ${b.label.toLowerCase()}`,
+              ).join(" · ")}
             </span>
           </section>
         </div>

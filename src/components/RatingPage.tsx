@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import gsap from "gsap";
-import { APP, categoryFor } from "../config";
+import { APP, brownieCount, categoryFor } from "../config";
 import { dateLong, dateShort, shiftISO, todayISO, weekdayLong } from "../lib/date";
 import { usePasscode } from "../lib/passcode";
 import { useDashboard } from "../lib/useDashboard";
@@ -146,7 +146,7 @@ function Board() {
       total: present.length,
       judged: present.filter((g) => g.mark).length,
       brownies: d.groups.reduce(
-        (n, g) => n + (g.mark?.overtime ? 1 : 0) + (g.mark?.holiday ? 1 : 0),
+        (n, g) => n + brownieCount(g.mark),
         0,
       ),
     };
