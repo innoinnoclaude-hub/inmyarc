@@ -362,12 +362,6 @@ export function MemberProfile({
             </ul>
           </section>
 
-          <p className="text-[11px] leading-[1.5] text-ink-4" data-stagger>
-            A day is judged as a whole by an admin, in one of five categories,
-            with up to two brownies — {BROWNIES.map((b) => b.label.toLowerCase()).join(" and ")}.
-            Nothing shows here until that decision is made. History before
-            1 October 2026 was cleared when the system changed.
-          </p>
         </div>
       )}
     </Dialog>

@@ -97,15 +97,15 @@ export const CATEGORIES: {
   ink: string;
 }[] = [
   { key: "extraordinary",  label: "Extraordinary",      short: "Extraordinary", rank: 1,
-    bg: "#f7d9e8", line: "#e3a8c8", ink: "#86215a" },
+    bg: "#fae6f0", line: "#e3a8c8", ink: "#86215a" },
   { key: "over_performed", label: "Over performed",     short: "Over",          rank: 2,
-    bg: "#d4e4f7", line: "#a3c2e6", ink: "#14447e" },
+    bg: "#e3edfa", line: "#a3c2e6", ink: "#14447e" },
   { key: "upto_mark",      label: "Up to the mark",     short: "Up to mark",    rank: 3,
-    bg: "#d6efdb", line: "#a3d4ad", ink: "#176234" },
+    bg: "#e4f5e8", line: "#a3d4ad", ink: "#176234" },
   { key: "can_be_better",  label: "Can be better",      short: "Can be better", rank: 4,
-    bg: "#fbeabd", line: "#e5cf8c", ink: "#78560a" },
+    bg: "#fcf1d4", line: "#e5cf8c", ink: "#78560a" },
   { key: "not_upto_mark",  label: "Not up to the mark", short: "Not up to mark", rank: 5,
-    bg: "#fad7d2", line: "#eeb0a8", ink: "#8c2317" },
+    bg: "#fce5e2", line: "#eeb0a8", ink: "#8c2317" },
 ];
 
 export const CATEGORY_BY_KEY = Object.fromEntries(
