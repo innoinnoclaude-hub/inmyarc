@@ -175,7 +175,7 @@ export function LogTable({
             <tbody
               key={group.member.id}
               data-group
-              className="border-b border-line last:border-b-0"
+              className="border-b-2 border-ink-4/60 last:border-b-0"
             >
               {(group.entries.length ? group.entries : [null]).map(
                 (entry, index) => (
@@ -192,7 +192,10 @@ export function LogTable({
                         {/* S.No + whether this person has marked their day */}
                         <td
                           rowSpan={span}
-                          className="border-r border-line px-2 py-3 align-top"
+                          className="border-r border-line py-3 pr-2 pl-[9px] align-top"
+                          style={{
+                            boxShadow: `inset 4px 0 0 ${cat ? cat.ink : "#d4d4cf"}`,
+                          }}
                         >
                           <div className="flex flex-col items-center gap-1.5">
                             <span
