@@ -170,6 +170,11 @@ export function LogTable({
           const att = group.dayLog
             ? ATTENDANCE_BY_KEY[group.dayLog.attendance]
             : null;
+          // nothing logged on a day that is over: it reads as leave, or a week
+          // off, until somebody says otherwise
+          const presumed = !att && group.presumed
+            ? ATTENDANCE_BY_KEY[group.presumed]
+            : null;
           const isMe = identity === group.member.id;
           const marked = group.dayLog !== null || group.entries.length > 0;
 
@@ -249,7 +254,7 @@ export function LogTable({
                             )}
                           </div>
                           <div className="mt-1.5">
-                            {att || !frozen ? (
+                            {att || presumed || !frozen ? (
                               <InlineSelect
                                 value={group.dayLog?.attendance ?? ""}
                                 disabled={frozen}
@@ -274,6 +279,20 @@ export function LogTable({
                                   <Chip tone={att.tone} dot>
                                     {att.short}
                                   </Chip>
+                                ) : presumed ? (
+                                  <span
+                                    title={`Nothing was logged, so this day counts as ${presumed.label.toLowerCase()}. Set it here to say otherwise.`}
+                                    className="inline-flex"
+                                  >
+                                    <Chip tone="mute">
+                                      <span className="opacity-80">
+                                        {presumed.short}
+                                      </span>
+                                      <span className="ml-1 text-[9px] tracking-[0.06em] uppercase opacity-70">
+                                        by default
+                                      </span>
+                                    </Chip>
+                                  </span>
                                 ) : (
                                   <Chip tone="mute">Not marked</Chip>
                                 )}

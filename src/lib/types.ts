@@ -63,6 +63,11 @@ export interface RowGroup {
   /** The admin's verdict, or null while the day is still unjudged. */
   mark: DayMark | null;
   /**
+   * What the day counts as when nothing was logged and nobody marked it — set
+   * only for days that are over. `dayLog` always wins over this.
+   */
+  presumed: AttendanceKey | null;
+  /**
    * Place on the day's board. Everyone in a category shares it — the standing
    * is the category, not a number per person — and it is null until judged.
    */

@@ -176,6 +176,12 @@ The admin picks a level from a ladder with all five on screen, climbing from
 level already in force clears it. The column sits at the right-hand end of the
 table, out of the way of the day's work.
 
+**A day nobody logged counts itself.** Once a day is over, anyone with no tasks
+and no attendance set reads as **Leave** on a weekday and **Week off** on a
+Saturday or Sunday, marked *by default* and counted as off in the stat strip.
+It is only a presumption — a logged task or an attendance set by hand wins — and
+it never applies to today, or everyone would read as absent from midnight.
+
 **Nothing is shown until the admin decides.** Until then the person reads
 *Awaiting review* and has no place. Once judged, their row and every task under
 it carry the category's colour, and the chip spells the verdict out.
@@ -190,7 +196,13 @@ it and nothing else: there is no insert, update or delete policy, so a verdict
 can only be set through `admin_set_mark`, which checks the passcode inside the
 database.
 
-Over a week or a month the standing works the same way — most extraordinary
+Review offers two leaderboards. **By verdict** compares the spread of
+categories. **By points** adds them up instead: a point for each step up the
+ladder — not up to the mark 1, can be better 2, up to the mark 3, over
+performed 4, extraordinary 5 — and **+1 for every cookie**. The first rewards
+peaks, the second rewards turning up well every day.
+
+Over a week or a month the verdict standing works the same way — most extraordinary
 days first, then over performed, and so on, with days not up to the mark
 counting against and brownies settling the rest. There is no average and no
 total, by design.

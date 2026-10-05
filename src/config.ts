@@ -30,6 +30,24 @@ export const ATTENDANCE: {
   { key: "leave", label: "Leave", short: "Leave", tone: "off" },
 ];
 
+/**
+ * What a day counts as when nobody logged anything on it.
+ *
+ * Once a day is over, silence is not "we don't know" — a weekday with no tasks
+ * is leave, a Saturday or Sunday is a week off. It is only a default: the
+ * moment someone logs a task or an admin sets attendance, that wins. It never
+ * applies to today, or everyone would read as absent from midnight until they
+ * get round to logging.
+ */
+export function defaultAttendance(
+  isoDate: string,
+  todayIso: string,
+  weekend: boolean,
+): AttendanceKey | null {
+  if (isoDate >= todayIso) return null;
+  return weekend ? "week_off" : "leave";
+}
+
 export const ATTENDANCE_BY_KEY = Object.fromEntries(
   ATTENDANCE.map((a) => [a.key, a]),
 ) as Record<AttendanceKey, (typeof ATTENDANCE)[number]>;
@@ -89,6 +107,8 @@ export const CATEGORIES: {
   short: string;
   /** 1 is the top of the board. */
   rank: number;
+  /** What the day is worth on the points leaderboard: one per step up. */
+  points: number;
   /** row tint */
   bg: string;
   /** border for chips on the tint */
@@ -96,15 +116,15 @@ export const CATEGORIES: {
   /** text and chip colour on the tint */
   ink: string;
 }[] = [
-  { key: "extraordinary",  label: "Extraordinary",      short: "Extraordinary", rank: 1,
+  { key: "extraordinary",  label: "Extraordinary",      short: "Extraordinary", rank: 1, points: 5,
     bg: "#fae6f0", line: "#e3a8c8", ink: "#86215a" },
-  { key: "over_performed", label: "Over performed",     short: "Over",          rank: 2,
+  { key: "over_performed", label: "Over performed",     short: "Over",          rank: 2, points: 4,
     bg: "#e3edfa", line: "#a3c2e6", ink: "#14447e" },
-  { key: "upto_mark",      label: "Up to the mark",     short: "Up to mark",    rank: 3,
+  { key: "upto_mark",      label: "Up to the mark",     short: "Up to mark",    rank: 3, points: 3,
     bg: "#e4f5e8", line: "#a3d4ad", ink: "#176234" },
-  { key: "can_be_better",  label: "Can be better",      short: "Can be better", rank: 4,
+  { key: "can_be_better",  label: "Can be better",      short: "Can be better", rank: 4, points: 2,
     bg: "#fcf1d4", line: "#e5cf8c", ink: "#78560a" },
-  { key: "not_upto_mark",  label: "Not up to the mark", short: "Not up to mark", rank: 5,
+  { key: "not_upto_mark",  label: "Not up to the mark", short: "Not up to mark", rank: 5, points: 1,
     bg: "#fce5e2", line: "#eeb0a8", ink: "#8c2317" },
 ];
 
@@ -156,4 +176,20 @@ export function browniesOf(mark: Partial<Brownies> | null | undefined): Brownies
 
 export function brownieCount(mark: Partial<Brownies> | null | undefined): number {
   return BROWNIES.reduce((n, b) => n + (mark?.[b.key] ? 1 : 0), 0);
+}
+
+/** A cookie is worth a point, whichever one it is. */
+export const BROWNIE_POINT = 1;
+
+/**
+ * What one judged day is worth on the points leaderboard: a point for each
+ * step up the ladder — 1 for not up to the mark through 5 for extraordinary —
+ * and one more for every brownie. An unjudged day is worth nothing.
+ */
+export function pointsForMark(
+  mark: (Partial<Brownies> & { category?: string }) | null | undefined,
+): number {
+  const c = categoryFor(mark?.category);
+  if (!c) return 0;
+  return c.points + brownieCount(mark) * BROWNIE_POINT;
 }

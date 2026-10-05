@@ -92,8 +92,12 @@ function buildRows(groups: RowGroup[]) {
     first: boolean;
   }[] = [];
   groups.forEach((g, index) => {
-    const att = g.dayLog ? ATTENDANCE_BY_KEY[g.dayLog.attendance] : null;
-    const day = [att ? att.label : "Not marked", g.dayLog?.note]
+    const effective = g.dayLog?.attendance ?? g.presumed;
+    const att = effective ? ATTENDANCE_BY_KEY[effective] : null;
+    const day = [
+      att ? `${att.label}${g.dayLog ? "" : " (by default)"}` : "Not marked",
+      g.dayLog?.note,
+    ]
       .filter(Boolean)
       .join(" — ");
     const lead = g.member.name;

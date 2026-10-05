@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isConfigured } from "./supabase";
-import { todayISO } from "./date";
+import { isWeekend, todayISO } from "./date";
 import type { DayLog, DayMark, Entry, Member, RowGroup } from "./types";
 import {
   brownieCount,
   categoryFor,
+  defaultAttendance,
   NO_BROWNIES,
   type AttendanceKey,
   type Brownies,
@@ -105,7 +106,9 @@ export function buildGroups(
   dayLogs: DayLog[],
   entries: Entry[],
   marks: DayMark[] = [],
+  date: string = todayISO(),
 ): RowGroup[] {
+  const presumed = defaultAttendance(date, todayISO(), isWeekend(date));
   const markByMember = new Map(marks.map((m) => [m.member_id, m]));
   const logByMember = new Map(dayLogs.map((d) => [d.member_id, d]));
   const entriesByMember = new Map<string, Entry[]>();
@@ -117,12 +120,18 @@ export function buildGroups(
 
   const rows = members
     .filter((m) => m.active || logByMember.has(m.id) || entriesByMember.has(m.id))
-    .map((member) => ({
-      member,
-      dayLog: logByMember.get(member.id) ?? null,
-      entries: entriesByMember.get(member.id) ?? [],
-      mark: markByMember.get(member.id) ?? null,
-    }));
+    .map((member) => {
+      const own = entriesByMember.get(member.id) ?? [];
+      const log = logByMember.get(member.id) ?? null;
+      return {
+        member,
+        dayLog: log,
+        entries: own,
+        mark: markByMember.get(member.id) ?? null,
+        // silence on a day that is over reads as leave, or a week off
+        presumed: !log && own.length === 0 ? presumed : null,
+      };
+    });
 
   const brownies = (r: (typeof rows)[number]) => brownieCount(r.mark);
   const rankOf = (r: (typeof rows)[number]) =>
@@ -307,8 +316,8 @@ export function useDashboard(date: string, passcode: string | null) {
 
   const groups = useMemo<RowGroup[]>(
     () =>
-      buildGroups(state.members, state.dayLogs, state.entries, state.marks),
-    [state.members, state.dayLogs, state.entries, state.marks],
+      buildGroups(state.members, state.dayLogs, state.entries, state.marks, date),
+    [state.members, state.dayLogs, state.entries, state.marks, date],
   );
 
   const memberById = useMemo(

@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { BROWNIES, CATEGORIES, formatDuration } from "../config";
+import {
+  BROWNIES,
+  BROWNIE_POINT,
+  CATEGORIES,
+  formatDuration,
+} from "../config";
 import {
   bucketOf,
   leaderboard,
@@ -7,6 +12,7 @@ import {
   useHistory,
   type DayRow,
   type Grain,
+  type Standing,
 } from "../lib/history";
 import { dateShort, shiftISO, startOfMonth, startOfWeek, todayISO } from "../lib/date";
 import type { Member } from "../lib/types";
@@ -85,6 +91,7 @@ export function ChartDialog({
   identity: string | null;
 }) {
   const [grain, setGrain] = useState<Grain>("week");
+  const [standing, setStanding] = useState<Standing>("verdicts");
   const [who, setWho] = useState<string>("");
   const [bucket, setBucket] = useState<string>("all");
   const from = startOf(grain);
@@ -115,8 +122,8 @@ export function ChartDialog({
   }, [scoped]);
 
   const board = useMemo(
-    () => leaderboard(people, byMember),
-    [people, byMember],
+    () => leaderboard(people, byMember, standing),
+    [people, byMember, standing],
   );
   const team = useMemo(() => tallyOf(scoped), [scoped]);
 
@@ -172,6 +179,14 @@ export function ChartDialog({
             </option>
           ))}
         </Select>
+        <Segmented
+          value={standing}
+          onChange={(v: Standing) => setStanding(v)}
+          options={[
+            { key: "verdicts", label: "By verdict" },
+            { key: "points", label: "By points" },
+          ]}
+        />
         <Select
           value={who}
           onChange={(e) => setWho(e.target.value)}
@@ -216,18 +231,30 @@ export function ChartDialog({
         <div className="flex flex-col gap-5" data-stagger>
           {/* the standing */}
           <section>
-            <h3 className="mb-2 text-[11px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
-              Standing{" "}
-              {bucket === "all"
-                ? "over the whole period"
-                : `for ${grain === "week" ? "week of " : ""}${label(bucket, grain)}`}
-            </h3>
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h3 className="text-[11px] font-semibold tracking-[0.1em] text-ink-3 uppercase">
+                Standing{" "}
+                {bucket === "all"
+                  ? "over the whole period"
+                  : `for ${grain === "week" ? "week of " : ""}${label(bucket, grain)}`}
+                {standing === "points" ? " — by points" : ""}
+              </h3>
+              {standing === "points" && (
+                <p className="text-[10px] text-ink-4">
+                  {CATEGORIES.slice()
+                    .reverse()
+                    .map((c) => `${c.label} ${c.points}`)
+                    .join(" · ")}{" "}
+                  · each cookie +{BROWNIE_POINT}
+                </p>
+              )}
+            </div>
             <div className="flex flex-col gap-1">
               {board.map(({ member, tally, place }) => (
                 <div
                   key={member.id}
                   className={cx(
-                    "grid grid-cols-[26px_104px_1fr_132px] items-center gap-3 rounded-sm px-2 py-1.5",
+                    "grid grid-cols-[26px_104px_1fr_176px] items-center gap-3 rounded-sm px-2 py-1.5",
                     member.id === identity && "bg-paper",
                     member.id === who && "ring-1 ring-line-strong",
                   )}
@@ -240,6 +267,17 @@ export function ChartDialog({
                   </span>
                   <MixBar counts={tally.byCategory} total={tally.judged} />
                   <span className="tnum flex items-center justify-end gap-2 text-[11px] text-ink-4">
+                    {standing === "points" && (
+                      <span
+                        className="text-[12.5px] font-semibold text-ink"
+                        title={`${tally.judged} judged day(s) and ${tally.brownies} brownie(s)`}
+                      >
+                        {tally.points}
+                        <span className="ml-0.5 text-[9.5px] font-normal text-ink-4">
+                          pts
+                        </span>
+                      </span>
+                    )}
                     {tally.brownies > 0 && (
                       <span
                         className="inline-flex items-center gap-0.5 text-[#7a5312]"
@@ -251,8 +289,8 @@ export function ChartDialog({
                         {tally.brownies}
                       </span>
                     )}
-                    <span>{tally.tasks} tasks</span>
-                    <span className="text-ink-3">
+                    <span className="whitespace-nowrap">{tally.tasks} tasks</span>
+                    <span className="whitespace-nowrap text-ink-3">
                       {formatDuration(tally.minutes)}
                     </span>
                   </span>

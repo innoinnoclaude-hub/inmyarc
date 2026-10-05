@@ -98,10 +98,10 @@ export function Summary({ groups }: { groups: RowGroup[] }) {
 
     for (const g of groups) {
       if (g.dayLog !== null || g.entries.length > 0 || g.mark) reported++;
-      if (g.dayLog) {
-        att[g.dayLog.attendance]++;
-        if (g.dayLog.attendance === "week_off" || g.dayLog.attendance === "leave")
-          off++;
+      const effective = g.dayLog?.attendance ?? g.presumed;
+      if (effective) {
+        att[effective]++;
+        if (effective === "week_off" || effective === "leave") off++;
         else working++;
       }
       for (const e of g.entries) {

@@ -6,6 +6,7 @@ import {
   CATEGORIES,
   brownieCount,
   categoryFor,
+  pointsForMark,
   type BrownieKey,
   type CategoryKey,
 } from "../config";
@@ -24,6 +25,8 @@ export interface Tally {
   minutes: number;
   judged: number;
   brownies: number;
+  /** The points leaderboard: a point per step up the ladder, one per brownie. */
+  points: number;
   /** How many days earned each brownie. */
   byBrownie: Record<BrownieKey, number>;
   /** How many days ended in each category. */
@@ -37,6 +40,7 @@ export function emptyTally(): Tally {
     minutes: 0,
     judged: 0,
     brownies: 0,
+    points: 0,
     byBrownie: Object.fromEntries(BROWNIES.map((b) => [b.key, 0])) as Record<
       BrownieKey,
       number
@@ -70,6 +74,7 @@ export function addTo(t: Tally, row: DayRow): Tally {
     t.byCategory[row.mark.category] += 1;
     for (const b of BROWNIES) if (row.mark[b.key]) t.byBrownie[b.key] += 1;
     t.brownies += brownieCount(row.mark);
+    t.points += pointsForMark(row.mark);
   }
   return t;
 }
@@ -95,9 +100,20 @@ export function compareTallies(a: Tally, b: Tally): number {
   return b.brownies - a.brownies;
 }
 
+/**
+ * Two ways to read the same month.
+ *
+ * `verdicts` compares the spread — most extraordinary days first, days not up
+ * to the mark counting against. `points` adds them up instead: 1 to 5 for the
+ * day's verdict and 1 for each brownie, which rewards turning up well every
+ * day over a handful of brilliant ones.
+ */
+export type Standing = "verdicts" | "points";
+
 export function leaderboard(
   members: Member[],
   rowsByMember: Map<string, DayRow[]>,
+  mode: Standing = "verdicts",
 ): { member: Member; tally: Tally; place: number | null }[] {
   const list = members.map((member) => ({
     member,
@@ -107,12 +123,16 @@ export function leaderboard(
     (x, y) =>
       // anyone with no verdict at all belongs at the bottom, whatever the rest did
       Number(x.tally.judged === 0) - Number(y.tally.judged === 0) ||
-      compareTallies(x.tally, y.tally) ||
+      (mode === "points"
+        ? y.tally.points - x.tally.points
+        : compareTallies(x.tally, y.tally)) ||
       x.member.name.localeCompare(y.member.name),
   );
-  // people with the same spread of verdicts share a place
+  // an identical record shares a place
   const key = (t: Tally) =>
-    CATEGORIES.map((c) => t.byCategory[c.key]).join("-") + `:${t.brownies}`;
+    mode === "points"
+      ? String(t.points)
+      : CATEGORIES.map((c) => t.byCategory[c.key]).join("-") + `:${t.brownies}`;
   let place = 0;
   let previous: string | null = null;
   let seen = 0;
