@@ -1,0 +1,127 @@
+# Push here, and it ships.
+#
+# Anything landing on `main` in this repository is mirrored to the repository
+# Vercel watches (innoinnoclaude-hub/inmyarc), which is what triggers the
+# deploy to www.inmyarc.com. Nobody has to remember a second push.
+#
+# What this workflow deliberately cannot do:
+#   * it never touches the database — no Supabase URL, no Postgres password, no
+#     psql, no migrations are applied here. Migrations are still run by hand,
+#     on purpose, because the board holds the only copy of the team's work.
+#   * it never force-pushes. The mirror is a plain fast-forward, so a rewritten
+#     or diverged history fails loudly instead of overwriting what is deployed.
+#
+# Setup, once (see §13.7 of VERSION.md for the exact values):
+#   1. deploy repo  → Settings → Deploy keys → add the public half of
+#      ~/.ssh/inmyarc_mirror_deploy, tick "Allow write access"
+#   2. this repo    → Settings → Secrets → Actions → new secret
+#      DEPLOY_REPO_KEY = the private half of that key
+
+name: Mirror to the deploying repo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-to-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    # A tripwire, not a gate on the database: CI cannot reach the database at
+    # all. This only stops a destructive migration from quietly riding an
+    # ordinary-looking commit into the repo everyone deploys from.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse destructive SQL added in this push
+        run: |
+          set -euo pipefail
+          base='${{ github.event.before }}'
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+
+          changed="$(git diff --name-only "$base" HEAD -- 'supabase/**/*.sql' || true)"
+          if [ -z "$changed" ]; then
+            echo "No SQL changed in this push."
+            exit 0
+          fi
+          echo "SQL touched: $changed"
+
+          # only the lines this push adds, and only real statements
+          added="$(git diff -U0 "$base" HEAD -- 'supabase/**/*.sql' \
+                   | grep -E '^\+' | grep -v '^\+\+\+' | sed 's/^+//' \
+                   | sed 's/--.*$//' || true)"
+
+          if printf '%s\n' "$added" | grep -Eiq '(^|[^a-z_])(delete[[:space:]]+from|drop[[:space:]]+(table|schema|database|column)|truncate)([^a-z_]|$)'; then
+            if printf '%s' '${{ github.event.head_commit.message }}' | grep -q '\[allow-destructive-sql\]'; then
+              echo "::warning::Destructive SQL added, allowed by [allow-destructive-sql] in the commit message."
+            else
+              echo "::error::This push adds SQL that deletes, drops or truncates data:"
+              printf '%s\n' "$added" | grep -Ein '(delete[[:space:]]+from|drop[[:space:]]+(table|schema|database|column)|truncate)' || true
+              echo "Nothing has been applied to the database — CI cannot reach it — but the mirror is stopped."
+              echo "If it is intended, put [allow-destructive-sql] in the commit message and push again."
+              exit 1
+            fi
+          fi
+          echo "No destructive statements added."
+
+  mirror:
+    # Only from the mirror repository: in the deploying repo this would be a
+    # push to itself.
+    if: github.repository != 'innoinnoclaude-hub/inmyarc'
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the deploy key is configured
+        env:
+          KEY: ${{ secrets.DEPLOY_REPO_KEY }}
+        run: |
+          if [ -z "${KEY:-}" ]; then
+            echo "::error::Secret DEPLOY_REPO_KEY is missing, so main cannot be mirrored and the site will not update."
+            echo "Add it under Settings → Secrets and variables → Actions (see the header of this file)."
+            exit 1
+          fi
+
+      - name: Load the deploy key
+        env:
+          KEY: ${{ secrets.DEPLOY_REPO_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/mirror
+          chmod 600 ~/.ssh/mirror
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          echo "GIT_SSH_COMMAND=ssh -i ~/.ssh/mirror -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+
+      - name: Push main to the deploying repo
+        run: |
+          set -euo pipefail
+          # no --force on purpose: a diverged history must fail, not overwrite
+          git push git@github.com:innoinnoclaude-hub/inmyarc.git HEAD:refs/heads/main
+
+      - name: Say what happened
+        run: |
+          echo "### Mirrored to the deploying repo" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$(git rev-parse --short HEAD)\` — $(git log -1 --pretty=%s)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vercel builds from that repository, so www.inmyarc.com follows in about a minute." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/mirror
