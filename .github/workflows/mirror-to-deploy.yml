@@ -88,17 +88,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check the deploy key is configured
+      # Two ways to ship: either Vercel builds from this repository directly, in
+      # which case nothing needs mirroring, or it still builds from the other
+      # one and this job carries the commit across. Without the key we assume
+      # the first and step aside, loudly enough to notice if that is wrong.
+      - name: Is there a key to mirror with?
+        id: key
         env:
           KEY: ${{ secrets.DEPLOY_REPO_KEY }}
         run: |
           if [ -z "${KEY:-}" ]; then
-            echo "::error::Secret DEPLOY_REPO_KEY is missing, so main cannot be mirrored and the site will not update."
-            echo "Add it under Settings → Secrets and variables → Actions (see the header of this file)."
-            exit 1
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::warning::No DEPLOY_REPO_KEY, so nothing was mirrored. Fine if Vercel builds from this repository; if it still builds from innoinnoclaude-hub/inmyarc, add the secret or this commit will not go live."
+          else
+            echo "have=yes" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Load the deploy key
+        if: steps.key.outputs.have == 'yes'
         env:
           KEY: ${{ secrets.DEPLOY_REPO_KEY }}
         run: |
@@ -109,12 +116,14 @@ jobs:
           echo "GIT_SSH_COMMAND=ssh -i ~/.ssh/mirror -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
 
       - name: Push main to the deploying repo
+        if: steps.key.outputs.have == 'yes'
         run: |
           set -euo pipefail
           # no --force on purpose: a diverged history must fail, not overwrite
           git push git@github.com:innoinnoclaude-hub/inmyarc.git HEAD:refs/heads/main
 
       - name: Say what happened
+        if: steps.key.outputs.have == 'yes'
         run: |
           echo "### Mirrored to the deploying repo" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
